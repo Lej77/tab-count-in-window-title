@@ -1,0 +1,29 @@
+{
+    "options_StopUpdates": {
+        "message": "Clear window titles and prevent further updates"
+    },
+    "options_UpdateStatus": {
+        "message": "Updating:"
+    },
+    "options_StartUpdates": {
+        "message": "Start updating window titles"
+    },
+    "options_UpdatesOn": {
+        "message": "True"
+    },
+    "options_UpdatesOff": {
+        "message": "False"
+    },
+    "options_MinTime": {
+        "message": "Minimum time between window title updates: "
+    },
+    "options_Milliseconds": {
+        "message": " milliseconds."
+    },
+    "options_Format": {
+        "message": "Window Title Preface Formatting:"
+    },
+    "options_FormatPlaceholders": {
+        "message": "%TabCount%: Number of tabs in the current window." 
+    }
+}

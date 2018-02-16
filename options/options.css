@@ -1,0 +1,48 @@
+body {
+    overflow-y: hidden;
+    font-size: 1.2em;
+}
+
+#clearTitlesArea {
+    display: flex;
+    justify-content: space-between;
+}
+#clearTitlesArea button {
+    text-align: center;
+    min-height: 3em;
+    font-size: 1em;
+    width: 40%;
+}
+
+#updateStatusArea {
+    color: white;
+    padding: 10px;
+    border: 5px;
+    border-radius: calc(10% * 0.5);
+}
+#updateStatusArea > * {
+    text-align: center;
+    width: 100%;
+}
+
+:root:not(.updating) #updateStatusArea {
+    background-color: red;
+}
+:root.updating #updateStatusArea {
+    background-color: green;
+}
+
+:root:not(.updating) #options_UpdatesOn {
+    display: none;
+}
+:root.updating #options_UpdatesOff {
+    display: none;
+}
+
+#formatArea {
+    padding-top: 20px;
+}
+#windowPrefixFormat {
+    width: 90%;
+    margin: 10px;
+}

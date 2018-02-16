@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <script type="application/javascript" src="/common.js"></script>
+  <link rel="stylesheet" type="text/css" href="options.css">
+</head>
+
+<body>
+  <div>
+    <div id="clearTitlesArea">
+      <button id="options_StopUpdates" class="message"></button>
+      <div id="updateStatusArea">
+        <div id="options_UpdateStatus" class="message"></div>
+        <div id="options_UpdatesOn" class="message"></div>
+        <div id="options_UpdatesOff" class="message"></div>
+      </div>
+      <button id="options_StartUpdates" class="message"></button>
+    </div>
+    <br />
+    <p>
+      <span id="options_MinTime" class="message"></span>
+      <input id="timeBetweenUpdatesInMilliseconds" type="number" min="-1">
+      <span id="options_Milliseconds" class="message"></span>
+    </p>
+  </div>
+  <div id="formatArea">
+    <div>
+      <label id="options_Format" class="message"></label>
+    </div>
+    <div>
+      <input type="text" id="windowPrefixFormat" rows="1"></input>
+    </div>
+    <div>
+      <label id="options_FormatPlaceholders" class="message"></label>
+    </div>
+  </div>
+  <script src="options.js"></script>
+</body>
+
+</html>

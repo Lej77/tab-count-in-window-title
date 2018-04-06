@@ -1,19 +1,15 @@
 
+const messagePrefix = 'message_';
 
 async function initiatePage() {
     let settings = Settings.get(new Settings());
     setTextMessages();
     settings = await settings;
 
-    for (let key of Object.keys(settings)) {
-        let element = document.getElementById(key);
-        if (!element)
-            continue;
-        element.value = settings[key];
-        element.addEventListener("input", e => {
-            Settings.set(key, e.target.value);
-        });
-    }
+    bindElementIdsToSettings(settings);
+
+
+    // #region Stop & Start Button
 
     let _isUpdating = false;
     let manager = {
@@ -33,28 +29,62 @@ async function initiatePage() {
 
             Settings.set("isEnabled", value);
         },
-    }
+    };
     if (settings.isEnabled) {
         manager.isUpdating = true;
     }
     
 
-    document.getElementById("options_StopUpdates").addEventListener("click", e => {
+    document.getElementById("stopUpdates").addEventListener("click", e => {
         manager.isUpdating = false;
     });
-    document.getElementById("options_StartUpdates").addEventListener("click", e => {
+    document.getElementById("startUpdates").addEventListener("click", e => {
         manager.isUpdating = true;
     });
+
+    // #endregion Stop & Start Button
 }
 
 
-function setTextMessages() {
-    let elementsWithText = document.getElementsByClassName("message");
-    for (let i = 0; i < elementsWithText.length; i++) {
-        let ele = elementsWithText[i];
-        if (ele.id) {
-            ele.textContent = browser.i18n.getMessage(ele.id);
+function setTextMessages(elementsToText = null) {
+    if (!Array.isArray(elementsToText)) {
+        rootElement = document;
+        if (elementsToText) {
+            rootElement = elementsToText;
         }
+        elementsToText = rootElement.querySelectorAll(`*[class*='${messagePrefix}']`);
+    }
+    for (let i = 0; i < elementsToText.length; i++) {
+        let ele = elementsToText[i];
+        for (let c of ele.classList) {
+            if (c.length > messagePrefix.length && c.startsWith(messagePrefix)) {
+                let messageId = c.substring(messagePrefix.length);
+                ele.textContent = browser.i18n.getMessage(messageId);
+                break;
+            }
+        }
+    }
+}
+
+
+function bindElementIdsToSettings(settings) {
+    for (let key of Object.keys(settings)) {
+        let element = document.getElementById(key);
+        if (!element) {
+            continue;
+        }
+
+        let propertyName;
+        if (element.type === 'checkbox') {
+            propertyName = 'checked';
+        } else {
+            propertyName = 'value';
+        }
+
+        element[propertyName] = settings[key];
+        element.addEventListener("input", e => {
+            Settings.set(key, e.target[propertyName]);
+        });
     }
 }
 

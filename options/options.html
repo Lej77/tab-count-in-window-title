@@ -8,32 +8,38 @@
 </head>
 
 <body>
-  <div>
-    <div id="clearTitlesArea">
-      <button id="options_StopUpdates" class="message"></button>
-      <div id="updateStatusArea">
-        <div id="options_UpdateStatus" class="message"></div>
-        <div id="options_UpdatesOn" class="message"></div>
-        <div id="options_UpdatesOff" class="message"></div>
-      </div>
-      <button id="options_StartUpdates" class="message"></button>
+  <div id="clearTitlesArea">
+    <button id="stopUpdates" class="message_options_StopUpdates"></button>
+    <div id="updateStatusArea">
+      <div class="message_options_UpdateStatus"></div>
+      <div id="updatesOn" class="message_options_UpdatesOn"></div>
+      <div id="updatesOff" class="message_options_UpdatesOff"></div>
     </div>
+    <button id="startUpdates" class="message_options_StartUpdates"></button>
+  </div>  
+  <div>
     <br />
     <p>
-      <span id="options_MinTime" class="message"></span>
+      <span class="message_options_MinTime"></span>
       <input id="timeBetweenUpdatesInMilliseconds" type="number" min="-1">
-      <span id="options_Milliseconds" class="message"></span>
+      <span class="message_options_Milliseconds"></span>
     </p>
+    <label>
+      <input id="ignorePrivateWindows" type="checkbox">
+      <text class="message_options_AllowInPrivateWindows"></text>
+    </label>    
   </div>
   <div id="formatArea">
     <div>
-      <label id="options_Format" class="message"></label>
+      <label class="message_options_Format"></label>
     </div>
     <div>
       <input type="text" id="windowPrefixFormat" rows="1"></input>
     </div>
     <div>
-      <label id="options_FormatPlaceholders" class="message"></label>
+      <label class="message_options_FormatPlaceholders_TabCount"></label>
+      <br />
+      <label class="message_options_FormatPlaceholders_TotalTabCount"></label>
     </div>
   </div>
   <script src="options.js"></script>

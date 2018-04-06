@@ -20,10 +20,16 @@
     "options_Milliseconds": {
         "message": " milliseconds."
     },
+    "options_AllowInPrivateWindows": {
+        "message": "Don't count tabs in private windows and don't set title's for private windows."
+    },
     "options_Format": {
         "message": "Window Title Preface Formatting:"
     },
-    "options_FormatPlaceholders": {
+    "options_FormatPlaceholders_TabCount": {
         "message": "%TabCount%: Number of tabs in the current window." 
+    },
+    "options_FormatPlaceholders_TotalTabCount": {
+        "message": "%TotalTabCount%: Total number of tabs in all windows."
     }
 }

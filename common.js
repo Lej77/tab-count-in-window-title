@@ -1,4 +1,13 @@
 
+// #region Constants
+
+const tabCountPlaceholder = '%TabCount%';
+const tabCountRegExp = new RegExp(tabCountPlaceholder, "ig");
+
+const totalTabCountPlaceholder = '%TotalTabCount%';
+const totalTabCountRegExp = new RegExp(totalTabCountPlaceholder, "ig");
+
+// #endregion Constants
 
 
 // #region Utilities
@@ -23,10 +32,57 @@ let createObjectFromKeys = function (
     } else {
         return keys;
     }
-}
+};
+
+let defineProperty = (obj, propertyName, get, set) => {
+    let getSet = {};
+    if (get) {
+        getSet.get = get;
+    }
+    if (set) {
+        getSet.set = set;
+    }
+    Object.defineProperty(obj, propertyName, getSet);
+};
+
+let checkAny = (array) => {
+    array = array.filter(value => value);
+    if (array.length === 0) {
+        return false;
+    }
+
+    let promiseWrapper = new PromiseWrapper();
+
+    let promises = 0;
+    let waitForValue = async (value) => {
+        try {
+            value = await value;
+            if (value) {
+                promiseWrapper.resolve(value);
+            }
+        } finally {
+            promises--;
+
+            if (promises <= 0) {
+                promiseWrapper.resolve(false);
+            }
+        }
+    };
+
+    promises++;
+    for (let value of array) {
+        promises++;
+        waitForValue(value);
+    }
+    promises--;
+
+    if (promises <= 0) {
+        promiseWrapper.resolve(false);
+    }
+    return promiseWrapper.getValue();
+};
 
 // #endregion Utilities
-
 
 
 class Settings {
@@ -36,10 +92,12 @@ class Settings {
 
     static getDefaultValues() {
         return {
+            isEnabled: true,
+            ignorePrivateWindows: true,
+
             timeBetweenUpdatesInMilliseconds: 100,
             windowPrefixFormat: '[%TabCount%] ',
-            isEnabled: true,
-        }
+        };
     }
 
 
@@ -89,7 +147,6 @@ class Settings {
         return new EventListener(browser.storage.onChanged, callback);
     }
 }
-
 
 
 class SettingsTracker {
@@ -143,17 +200,32 @@ class SettingsTracker {
 }
 
 
+// #region Events
 
 class EventListener {
-    constructor(event, callback) {
-        this._callback = callback;
-        this._event = event;
-        this._event.addListener(this._callback);
+    constructor(DOMElementOrEventObject, eventNameOrCallback, callback) {
+        if (typeof eventNameOrCallback === 'string' && typeof callback === 'function') {
+            this._DOMElement = DOMElementOrEventObject;
+            this._event = eventNameOrCallback;
+            this._callback = callback;
+        } else {
+            this._event = DOMElementOrEventObject;
+            this._callback = eventNameOrCallback;
+        }
+        if (this._DOMElement) {
+            this._DOMElement.addEventListener(this._event, this._callback);
+        } else {
+            this._event.addListener(this._callback);
+        }
     }
 
     close() {
         if (this._callback) {
-            this._event.removeListener(this._callback)
+            if (this._DOMElement) {
+                this._DOMElement.removeEventListener(this._event, this._callback);
+            } else {
+                this._event.removeListener(this._callback);
+            }
             this._callback = null;
         }
     }
@@ -161,137 +233,361 @@ class EventListener {
         return !Boolean(this._callback);
     }
     get isActive() {
-        return this._event.hasListener(this._callback);
+        if (this._DOMElement) {
+            return !this.isDisposed;
+        } else {
+            return this._event.hasListener(this._callback);
+        }
     }
 }
 
 
+class EventManager {
+    constructor() {
+        let listeners = [];
 
-class RequestSource {
-    constructor(sourceId, requestInfo = {}) {
-        this.id = sourceId;
-        this.requestInfo = requestInfo;
-        this.invalidated = true;
+        this.subscriber = {
+            addListener(listener) {
+                if (!listener || typeof listener !== 'function') {
+                    return;
+                }
+                if (listeners.includes(listener)) {
+                    return;
+                }
+                listeners.push(listener);
+            },
+            removeListener(listener) {
+                if (listeners.includes(listener)) {
+                    listeners = listeners.filter((l) => l !== listener);
+                }
+            },
+            hasListener(listener) {
+                return listeners.includes(listener);
+            }
+        };
 
-        this.blockTimeoutId = null;
-    }
+        Object.assign(this, this.subscriber);
 
-    invalidate(newRequestInfo) {
-        this.invalidated = true;
-
-        if (newRequestInfo) {
-            this.requestInfo = newRequestInfo;
-        }
-    }
-    grant() {
-        let info = this.requestInfo;
-        this.invalidated = false;
-        this.requestInfo = {};
-        return info;
-    }
-    block(time, callback) {
-        if (this.blockTimeoutId || this.blockTimeoutId === 0) {
-            clearTimeout(this.blockTimeoutId);
-            this.blockTimeoutId = null;
-        }
-        this.blockTimeoutId = setTimeout(() => {
-            this.blockTimeoutId = null;
-            callback();
-        }, time);
+        this.fire = function () {
+            let returned = [];
+            let args = Array.from(arguments);
+            for (let listener of listeners) {
+                try {
+                    returned.push(listener.apply(null, args));
+                } catch (error) {
+                    console.log('Error during event handling!' + '\n' + error);
+                }
+            }
+            return returned;
+        };
+        defineProperty(this, 'listeners', () => listeners, (value) => { listeners = value; });
     }
 }
 
+// #endregion Events
+
+
+// #region Delays
+
+class PromiseWrapper {
+    constructor(createPromise = true) {
+        let _resolve;
+        let _reject;
+        let _value;
+        let _isError = false;
+        let _set = false;
+        let _promise;
+        let _promiseCreated = false;
+
+        let _createPromise = () => {
+            if (_promiseCreated) {
+                return;
+            }
+            _promiseCreated = true;
+            _promise = new Promise((resolve, reject) => {
+                if (_set) {
+                    if (_isError) {
+                        reject(_value);
+                    } else {
+                        resolve(_value);
+                    }
+                } else {
+                    _resolve = resolve;
+                    _reject = reject;
+                }
+            });
+        };
+        let setInternal = (value, isError) => {
+            if (_set) {
+                return;
+            }
+            _set = true;
+            _isError = isError;
+            _value = value;
+
+            this.done = true;
+            this.isError = isError;
+            this.value = value;
+
+            if (isError) {
+                if (_reject) {
+                    _reject(value);
+                }
+            } else {
+                if (_resolve) {
+                    _resolve(value);
+                }
+            }
+        };
+        defineProperty(this, 'promise', () => {
+            if (!_promiseCreated) {
+                _createPromise();
+            }
+            return _promise;
+        });
+
+        this.resolve = (value) => setInternal(value, false);
+        this.reject = (value) => setInternal(value, true);
+        this.getValue = () => {
+            if (_promiseCreated) {
+                return _promise;
+            }
+            if (!_set || _isError) {
+                _createPromise();
+                return _promise;
+            } else {
+                return _value;
+            }
+        };
+        if (createPromise) {
+            _createPromise();
+        } else {
+            this.start = () => _createPromise();
+        }
+    }
+}
+
+
+class OperationManager {
+    constructor() {
+        var promiseWrapper = new PromiseWrapper(false);
+        let disposableCollection = new DisposableCollection();
+
+        let setValue = (value, isError = false) => {
+            if (isError) {
+                promiseWrapper.reject(value);
+            } else {
+                promiseWrapper.resolve(value);
+            }
+            disposableCollection.dispose();
+        };
+
+        this.trackDisposables = (disposables) => disposableCollection.trackDisposables(disposables);
+
+        defineProperty(this, 'done', () => promiseWrapper.done);
+
+        defineProperty(this, 'value',
+            () => promiseWrapper.getValue(),
+            (value) => setValue(value)
+        );
+
+        this.resolve = (value) => setValue(value);
+        this.reject = (value) => setValue(value, true);
+    }
+}
+
+
+class Timeout {
+    constructor(callback, timeInMilliseconds) {
+        let timeoutId = null;
+        let stop = () => {
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
+        if (callback && typeof callback === 'function') {
+            timeoutId = setTimeout(() => {
+                timeoutId = null;
+                callback();
+            }, timeInMilliseconds);
+        }
+        this.stop = () => stop();
+        defineProperty(this, 'isActive', () => timeoutId !== null);
+    }
+}
 
 
 class RequestManager {
-    constructor(
-        grantRequest,               // function (sourceId, requestInfo) return timeToBlockInMilliseconds
-        handleInvalidated = null,   // function (soruceId, currentRequestInfo, newRequestInfo) return requestInfoToStore
-    ) {
-        this.grantRequest = grantRequest;
-        this.handleInvalidated = handleInvalidated;
-
-        this.blockedSources = [];
-    }
+    constructor(callback = null, blockTimeInMilliseconds = 1000, simultaneousUpdates = false) {
+        let onUpdateManager = new EventManager();
+        this.onUpdate = onUpdateManager.subscriber;
+        this.onUpdate.addListener(callback);
 
 
-    newRequest(sourceId, requestInfo) {
-        if (requestInfo === undefined) {
-            requestInfo = sourceId;
-            sourceId = null;
-        }
-        if (!sourceId) {
-            sourceId = 0;
-        }
+        this.blockTimeInMilliseconds = blockTimeInMilliseconds;
 
+        let blockTimeout = null;
+        let invalidated = false;
+        let disposed = false;
+        let updates = 0;
+        let lastArgs = [];
 
-        let source = this.getSource(sourceId);
-        if (source) {
-            let infoGetter = this.handleInvalidated;
-            if (!infoGetter) {
-                infoGetter = RequestManager.defaultInvalidateHandling;
+        var block = () => {
+            if (blockTimeout) {
+                blockTimeout.stop();
             }
-            let newInfo = infoGetter(sourceId, source.requestInfo, requestInfo)
-
-            source.invalidate(newInfo);
-        } else {
-            source = new RequestSource(sourceId, requestInfo);
-            this.blockedSources.push(source);
-            this.grantSource(source);
-        }
-    }
-    async grantSource(source) {
-        let blockTime = 0;
-        while (source.invalidated && !blockTime) {
-            try {
-                let grantedRequestInfo = source.grant();
-                if (this.grantRequest) {
-                    blockTime = await this.grantRequest(source.id, grantedRequestInfo);
-                }
-            } catch (error) {
-                blockTime = 0;
-                console.log("Error on request handling!\n" + error)
+            if (disposed) {
+                return;
             }
-            if (blockTime) {
-                if (!Number.isInteger(blockTime)) {
-                    blockTime = Number(blockTime);
-                    if (blockTime === NaN) {
-                        blockTime = this.defaultBlockTimeInMilliseconds;
-                    }
-                }
-                if (blockTime < 0)
-                    blockTime = 0;
+            let time;
+            if (typeof this.blockTimeInMilliseconds === 'function') {
+                time = this.blockTimeInMilliseconds();
             } else {
-                blockTime = Boolean(blockTime);
+                time = this.blockTimeInMilliseconds;
             }
-        }
-
-        if (!blockTime) {
-            let index = this.blockedSources.indexOf(source);
-            if (index >= 0) {
-                this.blockedSources.splice(index, 1);
+            blockTimeout = new Timeout(unblock, time);
+            return blockTimeout;
+        };
+        var unblock = () => {
+            if (blockTimeout) {
+                blockTimeout.stop();
             }
-        } else {
-            source.block(blockTime, () => this.grantSource(source));
-        }
-        return blockTime;
-    }
-    getSource(sourceId) {
-        let index = this.blockedSources.map(blockedSource => blockedSource.id).indexOf(sourceId);
-        if (index < 0) {
-            return null;
-        } else {
-            return this.blockedSources[index];
-        }
-    }
+            if (invalidated) {
+                update();
+            }
+        };
+        var update = async () => {
+            if (disposed) {
+                return;
+            }
+            if (!simultaneousUpdates && updates > 0) {  // Unblocked but last update has yet to complete.
+                return;
+            }
+            let b = block();
+            invalidated = false;
+            let args = lastArgs;
+            lastArgs = [];
+
+            let releaseBlock = false;
+            try {
+                updates++;
+                releaseBlock = await checkAny(onUpdateManager.fire.apply(null, args));
+
+                if (releaseBlock && b === blockTimeout) {
+                    unblock();
+                }
+            } finally {
+                updates--;
+                if (updates <= 0 && !getBlocked() && invalidated) {
+                    update();
+                }
+            }
+        };
+        var getBlocked = () => blockTimeout && blockTimeout.isActive;
 
 
-    static defaultInvalidateHandling(sourceId, currentRequestInfo, newRequestInfo) {
-        return newRequestInfo;
+        defineProperty(this, 'isBlocked', getBlocked);
+        defineProperty(this, 'isInvalidated', () => invalidated);
+        defineProperty(this, 'isDisposed', () => disposed);
+
+        this.dispose = () => {
+            if (disposed) {
+                return;
+            }
+            disposed = true;
+            unblock();
+        };
+
+        this.invalidate = function () {   // update after block is released.
+            invalidated = true;
+            lastArgs = Array.from(arguments);
+            if (!getBlocked()) {
+                update();
+            }
+        };
+        this.unblock = unblock;                     // Unblock and update if invalidated.
+        this.forceUpdate = async function () {      // Unblock and update.
+            lastArgs = Array.from(arguments);
+            await update();
+        };
     }
 }
-Object.assign(RequestManager, {
-    defaultBlockTimeInMilliseconds: 200,
-});
+
+// #endregion Delays
 
 
+class DisposableCollection {
+    constructor(initialDisposables) {
+        var trackedDisposables = [];
+        var isDisposed = false;
+        var disposeFunctionNames = [
+            'stop',
+            'close',
+            'cancel',
+            'dispose',
+        ];
+        var onDisposed = new EventManager();
+        this.onDisposed = onDisposed.subscriber;
+
+        var callFunction = (obj, functionName) => {
+            if (obj[functionName] && typeof obj[functionName] === 'function') {
+                obj[functionName]();
+                return true;
+            }
+            return false;
+        };
+        var dispose = (obj) => {
+            for (let disposeFunctionName of disposeFunctionNames) {
+                if (callFunction(obj, disposeFunctionName)) {
+                    break;
+                }
+            }
+        };
+        var disposeAll = () => {
+            for (let disposable of trackedDisposables) {
+                dispose(disposable);
+            }
+        };
+        this.dispose = () => {
+            if (isDisposed) {
+                return;
+            }
+            disposeAll();
+            isDisposed = true;
+            onDisposed.fire(this);
+        };
+
+        this.trackDisposables = (disposables) => {
+            if (!disposables) {
+                return;
+            }
+            if (!Array.isArray(disposables)) {
+                disposables = [disposables];
+            }
+            for (let disposable of disposables) {
+                if (isDisposed) {
+                    dispose(disposable);
+                }
+                if (!trackedDisposables.includes(disposable)) {
+                    trackedDisposables.push(disposable);
+                }
+            }
+        };
+        this.untrackDisposables = (disposables) => {            
+            if (isDisposed) {
+                return;
+            }
+            if (!disposables) {
+                return;
+            }
+            if (!Array.isArray(disposables)) {
+                disposables = [disposables];
+            }
+            trackedDisposables = trackedDisposables.filter(disposable => !disposables.includes(disposable));
+        };
+        defineProperty(this, 'isDisposed', () => isDisposed);
+
+        this.trackDisposables(initialDisposables);
+    }
+}

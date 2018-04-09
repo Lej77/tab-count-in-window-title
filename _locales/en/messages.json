@@ -36,7 +36,7 @@
         "message": "Note: this feature requires the \"tabs\" permission to function."
     },
     "options_NewTabNoTitleWorkaround_Enabled": {
-        "message": "Workaround for no title in new tab pages. Firefox's new tab page starts without a title but has one after its reloaded. The title doesn't appear immediately after the tab is reloaded however, instead it appears after the window title preface is set. This option automatically reloads all new tab pages when they are created and then sets the window preface so that new tab pages allways have a title."
+        "message": "Workaround for no title in new tab pages. Firefox's new tab page starts without a title but has one after its reloaded. The title doesn't appear immediately after the tab is reloaded however, instead it appears after the window title preface is set. This option automatically reloads all new tab pages when they are created and then sets the window preface so that new tab pages always have a title."
     },
     "options_NewTabNoTitleWorkaround_LoadWait": {
         "message": "Time to wait before reloading new tab page: "
@@ -75,7 +75,7 @@
         }
     },
     "options_FormatPlaceholders_Count": {
-        "message": "$placeholder$: An intiger, starts as 1 and increments until the window's prefix is unique.",
+        "message": "$placeholder$: An integer, starts as 1 and increments until the window's prefix is unique.",
         "placeholders": {
           "placeholder" : {
             "content" : "$1"

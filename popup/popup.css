@@ -1,0 +1,59 @@
+
+body > * {
+  background-color: white;
+  font: caption;
+}
+
+body {
+    width: 200px;
+}
+.background {
+    top: 0px;
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
+    position: absolute;
+    z-index: -1000;
+    background-color: white;
+}
+
+.windowNameArea {
+    display: flex;
+    flex-flow: column;
+    align-items: center;
+    justify-content: space-between;
+
+    margin-bottom: 10px;
+}
+.windowNameLabel {
+    margin-bottom: 5px;
+}
+#windowName {
+    width: calc(100% - 10px);
+    padding: 5px;
+}
+
+.windowNameLabel,
+.headerArea > * {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.formatSection {
+    margin-bottom: 10px;
+}
+
+.overrideArea {
+    width: 100%;
+    border-bottom: 1px solid black;
+    padding-bottom: 4px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.overrideSettingArea {
+    padding: 5px;
+}

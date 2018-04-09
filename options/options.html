@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="utf-8">
-  <script type="application/javascript" src="/common.js"></script>
+  <script type="application/javascript" src="/common/common.js"></script>
+  <link rel="stylesheet" type="text/css" href="/common/common.css">
   <link rel="stylesheet" type="text/css" href="options.css">
 </head>
 
@@ -16,9 +17,9 @@
       <div id="updatesOff" class="message_options_UpdatesOff"></div>
     </div>
     <button id="startUpdates" class="message_options_StartUpdates"></button>
-  </div>  
-  <div>
-    <br />
+  </div>
+
+  <div id="generalSettingsArea">
     <p>
       <span class="message_options_MinTime"></span>
       <input id="timeBetweenUpdatesInMilliseconds" type="number" min="-1">
@@ -27,21 +28,76 @@
     <label>
       <input id="ignorePrivateWindows" type="checkbox">
       <text class="message_options_AllowInPrivateWindows"></text>
-    </label>    
+    </label>
+    <br />
+    <br />
+    <label>
+      <input id="dontSetPrivateWindowTitles" type="checkbox">
+      <text class="message_options_DontSetWindowTitleInPrivateWindows"></text>
+    </label>
+    <br />
+    <div id="formatArea">
+      <div>
+        <label class="message_options_Format"></label>
+      </div>
+      <div>
+        <input type="text" id="windowPrefixFormat" rows="1"></input>
+      </div>
+      <div id="formatPlaceholders" class="textSelectable">
+      </div>
+    </div>
   </div>
-  <div id="formatArea">
+
+  <div id="windowDataArea">
     <div>
-      <label class="message_options_Format"></label>
+      <label class="message_options_WindowData_DefaultWindowName"></label>
     </div>
     <div>
-      <input type="text" id="windowPrefixFormat" rows="1"></input>
+      <input type="text" id="windowDefaultName" rows="1"></input>
     </div>
-    <div>
-      <label class="message_options_FormatPlaceholders_TabCount"></label>
-      <br />
-      <label class="message_options_FormatPlaceholders_TotalTabCount"></label>
+    <br />
+    <label>
+      <input id="windowInheritName" type="checkbox">
+      <text class="message_options_WindowData_InheritWindowName"></text>
+    </label>
+    <br />
+    <br />
+    <label>
+      <input id="windowInheritSettings" type="checkbox">
+      <text class="message_options_WindowData_InheritWindowSettings"></text>
+    </label>
+    <br />
+    <br />
+    <div class="buttonArea">
+      <button id="clearWindowDataButton" class="message_options_WindowData_ClearData_Button"></button>
+      <button id="applyDefaultWindowNameButton" class="message_options_WindowData_ApplyDefaultName_Button"></button>
     </div>
   </div>
+
+  <div id="fixNoTabForNewTabPagesArea">
+    <div class="enabler message_options_NewTabNoTitleWorkaround_Permission"></div>
+    <br />
+    <label class="enabler">
+      <input id="newTabNoTitleWorkaround_Enabled" type="checkbox">
+      <text class="message_options_NewTabNoTitleWorkaround_Enabled"></text>
+    </label>
+    <p>
+      <span class="message_options_NewTabNoTitleWorkaround_LoadWait"></span>
+      <input id="newTabNoTitleWorkaround_LoadWaitInMilliseconds" type="number" min="-1">
+      <span class="message_options_Milliseconds"></span>
+    </p>
+    <p>
+      <span class="message_options_NewTabNoTitleWorkaround_MinPrefixWait"></span>
+      <input id="newTabNoTitleWorkaround_MinPrefixWaitInMilliseconds" type="number" min="-1">
+      <span class="message_options_Milliseconds"></span>
+    </p>
+    <p>
+      <span class="message_options_NewTabNoTitleWorkaround_ReloadWait"></span>
+      <input id="newTabNoTitleWorkaround_ReloadWaitInMilliseconds" type="number" min="-1">
+      <span class="message_options_Milliseconds"></span>
+    </p>
+  </div>
+
   <script src="options.js"></script>
 </body>
 

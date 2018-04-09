@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Tab Count in Window Title",
-  "version": "3.0",
+  "version": "4.0",
   "default_locale": "en",
   "applications": {
     "gecko": {
@@ -12,12 +12,29 @@
     "page": "options/options.html"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "sessions"
+  ],
+  "optional_permissions": [
+    "tabs"
   ],
   "background": {
     "scripts": [
-      "common.js",
+      "common/common.js",
       "background.js"
+    ]
+  },
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/popup-16-light.png"
+    },
+    "default_popup": "popup/popup.html",
+    "theme_icons": [
+      {
+        "light": "icons/popup-16-dark.png",
+        "dark": "icons/popup-16-light.png",
+        "size": 16
+      }
     ]
   }
 }

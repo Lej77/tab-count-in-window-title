@@ -1,11 +1,13 @@
 body {
     overflow-y: hidden;
     font-size: 1.2em;
+    margin-bottom: -50px;
 }
 
 #clearTitlesArea {
     display: flex;
     justify-content: space-between;
+    margin-bottom: 35px;
 }
 #clearTitlesArea button {
     text-align: center;
@@ -18,7 +20,7 @@ body {
     color: white;
     padding: 10px;
     border: 5px;
-    border-radius: calc(10% * 0.5);
+    border-radius: 5px;
 }
 #updateStatusArea > * {
     text-align: center;
@@ -42,7 +44,100 @@ body {
 #formatArea {
     padding-top: 20px;
 }
+
+#windowDefaultName,
 #windowPrefixFormat {
     width: 90%;
     margin: 10px;
+    margin-left: 4%;
+}
+
+#fixNoTabForNewTabPagesArea {
+    padding: 5px;
+}
+#fixNoTabForNewTabPagesArea:not(.enabled) > *:not(.enabler) {
+    opacity: 0.65;
+}
+
+
+#windowDataArea > .buttonArea {
+    display: flex;
+    justify-content: space-around;
+}
+#applyDefaultWindowNameButton,
+#clearWindowDataButton {
+    height: 40px;
+}
+
+
+
+.manageArea {
+    display: flex;
+    padding: 0px;
+    margin: -2px;
+}
+.manageArea > *:not(:first-child) {
+    margin-left: -2px;
+}
+.manageArea,
+.manageArea * {
+    pointer-events: all !important;
+    cursor: auto !important;
+}
+
+.permissionHeader {
+    flex: 1 1 auto !important;
+    align-self: center;
+    font-size: 20px;
+}
+.permissionInfobox {
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 5px;
+    padding-left: 10px;
+    width: 115px;
+    font-size: 15px;
+}
+.permissionInfobox *:not(:first-child) {
+  text-align: center;
+  flex: 1 1 auto;
+}
+.permissionController .permissionInfobox {
+    background-color: red;
+}
+.permissionController.granted .permissionInfobox {
+    background-color: green;
+}
+.permissionController.granted .permissionInfobox .notGranted {
+    display: none;
+}
+.permissionController:not(.granted) .permissionInfobox .granted {
+    display: none;
+}
+
+.enablable.enabled.permissionNeeded {
+    background-color: hsl(60, 80%, 90%) !important;
+}
+
+
+:root.prompting > *:not(.prompt) {
+    opacity: 0.6;
+}
+:root.prompting .screenBlocker {
+    background-color: hsla(0, 0%, 0%, 30%);
+}
+
+.browserActionPrompt:not(.active) {
+    display: none;
+}
+.browserActionPrompt {
+    position: absolute;
+    background-color: white;
+    border: 1px solid black;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 5px 5px 10px -1px;
+    width: 80%;
+    left: 10%;
 }

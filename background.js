@@ -129,8 +129,8 @@ class WindowWrapperCollection {
         return;
       }
 
-      clearFormatInfo();
       titleFormat = value;
+      clearFormatInfo();
 
       this.updateWindowTitles();
     };
@@ -144,6 +144,9 @@ class WindowWrapperCollection {
 
     let getNewTabFix_Enabled = () => {
       return newTabNoTitleFixOptions.isEnabled;
+    };
+    let getNewTabFix_TrackHandledTabs = () => {
+      return newTabNoTitleFixOptions.trackHandled;
     };
     let getNewTabFix_LoadWaitTime = () => {
       return newTabNoTitleFixOptions.loadWait;
@@ -176,14 +179,35 @@ class WindowWrapperCollection {
     var getWindowDataSettings = () => {
       return windowDataSettings;
     };
-    var setWindowDataSettings = (value) => {
-      if (value === windowDataSettings) {
+    var setWindowDataSettings = async (value) => {
+      if (deepCopyCompare(value, windowDataSettings)) {
+        windowDataSettings = value;
         return;
       }
+      let oldValue = windowDataSettings;
       windowDataSettings = value;
 
       if (isStarted) {
+        let wrappersBefore = this.array;
         startNeededListeners();
+
+
+        if (Boolean(value.trackRestore) !== Boolean(oldValue.trackRestore)) {
+          let wrappers;
+          if (wrappersBefore.length > 0) {
+            wrappers = wrappersBefore;
+          } else {
+            await this.start;
+            wrappers = this.array;
+          }
+          if (wrappers.length > 0) {
+            wrappers.forEach(wrapper => wrapper.trackSessionRestore = value.trackRestore);
+          } else {
+            let keyDataCombo = {};
+            keyDataCombo[windowDataKeys.isRestored] = value.trackRestore ? true : undefined;
+            await WindowWrapperCollection.setWindowData(keyDataCombo);
+          }
+        }
       }
     };
     defineProperty(this, 'windowDataSettings', getWindowDataSettings, setWindowDataSettings);
@@ -199,11 +223,11 @@ class WindowWrapperCollection {
       let windowInfo = getWindowDataSettings();
 
       let trackWindowFocus = windowInfo.inheritName || windowInfo.inheritSettings;
-      let handleWindowData = windowInfo.defaultName || windowInfo.inheritName || windowInfo.inheritSettings;
+      let handleWindowData = (windowInfo.defaultName && windowInfo.defaultName !== '') || windowInfo.inheritName || windowInfo.inheritSettings;
 
-      let trackWindows = !titleFormat || titleFormat === '' || handleWindowData;
       let trackTabs = info.useTabCount || info.useTotalTabCount;
       let trackNewTabs = getNewTabFix_Enabled();
+      let trackWindows = info.hasText || handleWindowData || trackTabs || trackNewTabs;
 
       // console.log(`tracking:\nTabs: ${trackTabs}\nWindows: ${Boolean(trackWindows || trackTabs || trackNewTabs)}\nNewTabFix: ${trackNewTabs}`);
 
@@ -232,14 +256,12 @@ class WindowWrapperCollection {
         }
       }
 
-      if (!trackTabs && !trackNewTabs) {
-        if (trackWindows) {
-          if (windowListeners) {
-            windowListeners.dispose();
-            WindowWrapper.clearWindowPrefixes();
-          }
-        } else {
-          startWindowListeners();
+      if (trackWindows) {
+        startWindowListeners();
+      } else {
+        if (windowListeners) {
+          this.array.forEach(wrapper => wrapper.clearPrefix());
+          windowListeners.dispose();
         }
       }
     };
@@ -333,60 +355,86 @@ class WindowWrapperCollection {
 
 
     var newTabNoTitleFixListeners = null;
+    let newTabNoTitleFix_SetTrackHandled = null;
     var startNewTabNoTitleFixListeners = () => {
       if (newTabNoTitleFixListeners) {
+        let callback = newTabNoTitleFix_SetTrackHandled;
+        if (callback && typeof callback === 'function') {
+          let shouldTrackHandledTabs = getNewTabFix_TrackHandledTabs();
+          callback(shouldTrackHandledTabs);
+        }
         return;
       }
 
-      startWindowListeners();
 
       let onTabStateChange = new EventManager();
-      let waitForLoadState = async (tabId, timeoutTime, onlyCompletedLoading = false) => {
+      let waitForLoadState = async (tabId, timeoutTime, onlyCompletedLoading = false, useSafeWait = true) => {
+        if (timeoutTime <= 0) {
+          return;
+        }
         let collection = new DisposableCollection();
+        let loadStatePromiseWrapper = new PromiseWrapper();
         try {
-          let maxTime = safeWait(timeoutTime, collection);
-          let loadState = new Promise((resolve, reject) => {
-            try {
-              let loadStateListener = new EventListener(onTabStateChange, (tabId2, loadState) => {
-                if (tabId2 === tabId) {
-                  if (onlyCompletedLoading && loadState === 'loading') {
-                    return;
-                  }
-                  resolve(loadState);
-                }
-              });
-              new EventListener(loadStateListener.onClose, () => {
-                resolve();
-              });
-              collection.trackDisposables(loadStateListener);
-            } catch (error) {
-              resolve();
+          let maxTime;
+          if (useSafeWait) {
+            maxTime = safeWait(timeoutTime, collection);
+          } else {
+            maxTime = new Promise((resolve, reject) => {
+              try {
+                let timeout = new Timeout(resolve, timeoutTime);
+                timeout.onStop.addListener(() => resolve());
+                collection.trackDisposables(timeout);
+              } catch (error) {
+                reject(error);
+              }
+            });
+          }
+          let loadStateListener = new EventListener(onTabStateChange, (tabId2, loadState) => {
+            if (tabId2 === tabId) {
+              if (onlyCompletedLoading && loadState === 'loading') {
+                return;
+              }
+              loadStatePromiseWrapper.resolve(loadState);
             }
           });
-          await Promise.race([maxTime, loadState]);
+          collection.trackDisposables(loadStateListener);
+          return await Promise.race([maxTime, loadStatePromiseWrapper.getValue()]);
         } finally {
           collection.dispose();
+          loadStatePromiseWrapper.resolve();
         }
       };
 
+      let isTrackingHandled = false;
       let handleTabIds = [];
       let newTabURLs = [
         'about:newtab',
         'about:home',
       ];
       let handleNewPage = async (tab, justCreated = false) => {
-        if (!getNewTabFix_Enabled() || tab.discarded || !tab.url) {
-          return;
-        }
+        // Some new tab pages has a title and some don't:
+        // # New tab pages opened in private winows allways have titles and they are allways shown.
+        // # New tab pages opened in new tabs needs to be reloaded to have a tilte and then the window title needs to be updated for it to be shown. The tab doesn't need to be reloaded if the tab was opened in a new window.
+        // # New tab pages navigated to have a title but the window title needs to be updated before it is shown.
+
+        // Window title is only updated at certain times:
+        // # When title preface is set.
+        // # When the window's active tab is changed.
+        // # When the tab's page is changed. 
+        //      This is normally done after the tab has loaded but if the title preface is set when the tab is loading then the tab's title at this moment will be used. 
+        //      This means that if the tab has no title at that moment then the window preface won't be shown.
+        //      The tab title can be set a bit after the tab.status is set to 'complete', even if it is usually set by then. So to ensure that the tab title is set its best to wait a bit extra.
 
         try {
-          let createTime = Date.now();
-          let wrapper = this.getWindowWrappersById(tab.windowId);
-          if (wrapper && wrapper.window.incognito) {
+          if (!getNewTabFix_Enabled() || tab.discarded || !tab.url || tab.incognito) {
             return;
           }
 
-          // Wait for tab to navigate to its intended url:
+          let createTime = Date.now();
+
+
+          // #region Wait for URL:
+
           let waitAttempt = 0;
           while (tab.url === 'about:blank') {
             waitAttempt++;
@@ -406,18 +454,30 @@ class WindowWrapperCollection {
             }
           }
 
+          // #endregion Wait for URL
+
+
           // Check if url is a new tab url:
           if (!newTabURLs.includes(tab.url)) {
             return;
           }
 
-          if (handleTabIds.includes(tab.id)) {
-            // Prevent reload of same tab
-            return true;
-          }
-          handleTabIds.push(tab.id);
 
-          let reloadTime;
+          // #region Skip Fixed Tabs
+
+          if (isTrackingHandled) {
+            if (handleTabIds.includes(tab.id)) {
+              // New tab page's title already fixed.
+              return true;
+            }
+            handleTabIds.push(tab.id);
+          }
+
+          // #endregion Skip Fixed Tabs
+
+
+          // #region Reload Tab
+
           let reloadRequired = justCreated && tab.url === 'about:newtab';
           if (reloadRequired) {
             // Min time before reloading tab:
@@ -425,36 +485,79 @@ class WindowWrapperCollection {
 
             // Reload tab:
             await browser.tabs.reload(tab.id);
-
-          }
-          if (reloadRequired || tab.status !== 'complete') {
-            // Max wait before setting title prefix (aborted by tab completing loading): 
-            reloadTime = Date.now();
-            await waitForLoadState(tab.id, getNewTabFix_ReloadWaitTime(), true);
           }
 
-          // Min wait before setting title prefix:
-          let elapsedWaitTime = reloadTime ? Date.now() - reloadTime : 0;
-          let minWaitLeft = getNewTabFix_MinPrefixWait() - elapsedWaitTime;
-          await safeWait(minWaitLeft);
+          // #endregion Reload Tab
+
 
           if (tab.active) {
-            if (!wrapper) {
-              wrapper = this.getWindowWrappersById(tab.windowId);
+            let reloadTime = Date.now();
+            let newStatus = tab.status;
+
+
+            // #region Ensure the tab is loaded
+
+            if (reloadRequired || tab.status !== 'complete') {
+              // Max wait before setting title prefix (continues on tab completing loading): 
+              newStatus = await waitForLoadState(tab.id, getNewTabFix_ReloadWaitTime(), true);
             }
+
+            // #endregion Ensure the tab is loaded
+
+
+            // #region Ensure tab wasn't reloaded
+
+            let getMinWaitTime = () => getNewTabFix_MinPrefixWait() - (Date.now() - reloadTime);
+            if (!newStatus) {
+              await safeWait(getMinWaitTime());
+            }
+            let minWaitForReloadTime = 50;
+            while (newStatus) {
+              // Wait to see if tab starts to load again:
+              let waitForReloadTime = getMinWaitTime();
+              if (waitForReloadTime < minWaitForReloadTime) {
+                waitForReloadTime = minWaitForReloadTime;
+              }
+              newStatus = await waitForLoadState(tab.id, waitForReloadTime, true, waitForReloadTime > 250);
+              while (newStatus && newStatus !== 'complete') {
+                // Tab was reloaded => Wait for load completion:
+                newStatus = await waitForLoadState(tab.id, getNewTabFix_ReloadWaitTime(), true);
+              }
+            }
+
+            // #endregion Ensure tab wasn't reloaded
+
+
+            // #region Recheck if tab is active
+
+            try {
+              tab = await browser.tabs.get(tab.id);
+            } catch (error) { return true; }
+
+            if (!tab.active) {
+              return true;
+            }
+
+            // #endregion Recheck if tab is active
+
+
+            // #region Set Window Preface
+
+            let wrapper = this.getWindowWrappersById(tab.windowId);
             if (wrapper) {
               wrapper.forceSetTitlePrefix();
             } else {
-              await WindowWrapper.clearWindowPrefixes(tab.windowId);
+              await WindowWrapper.clearWindowPrefixes([tab.windowId]);
               wrapper = this.getWindowWrappersById(tab.windowId);
               if (wrapper) {
                 wrapper.forceSetTitlePrefix();
               }
             }
-          }
-        } catch (error) { }
 
-        return true;
+            // #endregion Set Window Preface
+          }
+          return true;
+        } catch (error) { }
       };
       let removeHandledTabId = (tabId) => {
         while (true) {
@@ -467,37 +570,66 @@ class WindowWrapperCollection {
       };
       let handleURLChange = async (tab) => {
         let affected = await handleNewPage(tab);
-        if (!affected) {
+        if (!affected && isTrackingHandled) {
           removeHandledTabId(tab.id);
         }
       };
 
       let listeners = new DisposableCollection([
-        new EventListener(browser.tabs.onUpdated, (tabId, changeInfo, tab) => handleEvent(() => {
+        new EventListener(browser.tabs.onUpdated, (tabId, changeInfo, tab) => {
           if (changeInfo.status || changeInfo.discarded) {
             let loadState = changeInfo.discarded ? 'discarded' : changeInfo.status;
             onTabStateChange.fire(tabId, loadState);
           }
           if (changeInfo.url) {
+            if (changeInfo.status) {
+              tab.status = changeInfo.status;
+            }
             handleURLChange(tab);
           }
-        })),
-        new EventListener(tabOnCreated, (tab) => handleEvent(() => {
+        }),
+        new EventListener(tabOnCreated, (tab) => {
           handleNewPage(tab, true);
-        })),
-        new EventListener(tabOnRemoved, (tabId, { windowId, isWindowClosing }) => handleEvent(() => {
-          removeHandledTabId(tabId);
-        })),
+        }),
       ]);
       disposables.trackDisposables(listeners);
+
+      let trackingListeners = null;
+      let trackCallback = (value) => {
+        if (value === isTrackingHandled) {
+          return;
+        }
+
+        isTrackingHandled = value;
+        handleTabIds = [];
+
+        if (trackingListeners) {
+          trackingListeners.dispose();
+          listeners.untrackDisposables(trackingListeners);
+          trackingListeners = null;
+        }
+
+        trackingListeners = new DisposableCollection([
+          new EventListener(tabOnRemoved, (tabId, { windowId, isWindowClosing }) => {
+            removeHandledTabId(tabId);
+          }),
+        ]);
+        listeners.trackDisposables(trackingListeners);
+      };
 
       new EventListener(listeners.onDisposed, () => {
         if (listeners === newTabNoTitleFixListeners) {
           newTabNoTitleFixListeners = null;
         }
+        if (newTabNoTitleFix_SetTrackHandled === trackCallback) {
+          newTabNoTitleFix_SetTrackHandled = null;
+        }
         disposables.untrackDisposables(listeners);
       });
+      newTabNoTitleFix_SetTrackHandled = trackCallback;
       newTabNoTitleFixListeners = listeners;
+
+      trackCallback(getNewTabFix_TrackHandledTabs());
     };
 
 
@@ -507,7 +639,6 @@ class WindowWrapperCollection {
         return;
       }
 
-      startWindowListeners();
       let listeners = new DisposableCollection([
         new EventListener(tabOnCreated, (tab) => handleEvent(async () => {
           getWrapperAndDo(tab.windowId, (wrapper) => {
@@ -550,20 +681,24 @@ class WindowWrapperCollection {
 
       let listeners = new DisposableCollection([
         new EventListener(browser.windows.onCreated, (window) => handleEvent(() => {
+          let initialWindowData = {};
+
           let winDataSettings = getWindowDataSettings();
+          initialWindowData[windowDataKeys.name] = winDataSettings.defaultName;
           let lastWrapper;
           if (winDataSettings.inheritName || winDataSettings.inheritSettings) {
             lastWrapper = this.getWindowWrappersById(getLastFocusedWindow(window.id));
           }
-          let winName = winDataSettings.defaultName;
-          if (winDataSettings.inheritName && lastWrapper) {
-            winName = lastWrapper.windowName;
+
+          if (lastWrapper) {
+            if (winDataSettings.inheritName) {
+              initialWindowData[windowDataKeys.name] = lastWrapper.windowName;
+            }
+            if (winDataSettings.inheritSettings) {
+              initialWindowData[windowDataKeys.settings] = lastWrapper.windowSettings;
+            }
           }
-          let winSettings;
-          if (winDataSettings.inheritSettings && lastWrapper) {
-            winSettings = lastWrapper.windowSettings;
-          }
-          this.addWindowWrappers(new WindowWrapper(window, getBlockTime, winName, winSettings));
+          this.addWindowWrappers(new WindowWrapper(window, getBlockTime, winDataSettings.trackRestore, initialWindowData));
         })),
         new EventListener(browser.windows.onRemoved, (windowId) => handleEvent(() => {
           this.removeWindowWrappers(this.getWindowWrappersById(windowId));
@@ -594,7 +729,7 @@ class WindowWrapperCollection {
       });
       windowListeners = listeners;
 
-      start();
+      this.start = _start();
     };
     defineProperty(this, 'isTrackingWindows', () => Boolean(windowListeners));
 
@@ -738,7 +873,6 @@ class WindowWrapperCollection {
 
     var start = () => {
       startWindowListeners();
-      this.start = _start();
     };
     var _start = async () => {
       if (isDisposed) {
@@ -748,7 +882,8 @@ class WindowWrapperCollection {
       isStarted = false;
       let windows = await browser.windows.getAll({ populate: true });
 
-      this.addWindowWrappers(windows.map(window => new WindowWrapper(window, getBlockTime)));
+      let winDataSettings = getWindowDataSettings();
+      this.addWindowWrappers(windows.map(window => new WindowWrapper(window, getBlockTime, winDataSettings.trackRestore)));
 
       for (let callback of queuedCallbacks) {
         if (isDisposed) {
@@ -869,12 +1004,39 @@ class WindowWrapperCollection {
     }
     return tabCount;
   }
+
+  static async setWindowData(dataKeyValueCombos) {
+    if (!dataKeyValueCombos) {
+      return;
+    }
+    let dataKeys = Object.keys(dataKeyValueCombos);
+    if (dataKeys.length === 0) {
+      return;
+    }
+    let windows = await browser.windows.getAll();
+    let removeData = async (windowId, dataKey) => {
+      await browser.sessions.removeWindowValue(windowId, dataKey);
+      onWindowDataUpdate.fire(windowId, dataKey, undefined);
+    };
+    let setData = async (windowId, dataKey, value) => {
+      await browser.sessions.setWindowValue(windowId, dataKey, value);
+      onWindowDataUpdate.fire(windowId, dataKey, value);
+    };
+    let promises = [];
+    for (let window of windows) {
+      for (let key of dataKeys) {
+        let value = dataKeyValueCombos[key];
+        promises.push(value === undefined ? removeData(window.id, key) : setData(window.id, key, value));
+      }
+    }
+    await Promise.all(promises);
+  }
 }
 
 
 
 class WindowWrapper {
-  constructor(window, blockTime, windowName, windowSettings) {
+  constructor(window, blockTime, trackSessionRestore, initialWindowData = {}) {
     var ignoredTabIds = [];
     var onTabUpdate = new EventManager();
     var onTabCountChange = new EventManager();
@@ -949,6 +1111,37 @@ class WindowWrapper {
 
     // #region Window Data
 
+    let handleRestoreData = async (tracking) => {
+      let isTracked = false;
+      try {
+        if (tracking) {
+          isTracked = await browser.sessions.getWindowValue(window.id, windowDataKeys.isRestored);
+          return isTracked;
+        } else {
+          return false;
+        }
+      } finally {
+        if (tracking) {
+          if (!isTracked) {
+            browser.sessions.setWindowValue(window.id, windowDataKeys.isRestored, true);
+          }
+        } else {
+          browser.sessions.removeWindowValue(window.id, windowDataKeys.isRestored);
+        }
+      }
+    };
+    let isRestoredWindow = handleRestoreData(trackSessionRestore);
+    this.isRestoredWindow = isRestoredWindow;
+
+    defineProperty(this, 'trackSessionRestore', () => trackSessionRestore, (value) => {
+      value = Boolean(value);
+      if (Boolean(trackSessionRestore) === value) {
+        return;
+      }
+      trackSessionRestore = value;
+      isRestoredWindow = Promise.resolve(isRestoredWindow).finally(() => handleRestoreData(trackSessionRestore));
+    });
+
     let onWindowDataChange = new EventManager();
     this.onDataChange = onWindowDataChange.subscriber;
 
@@ -1009,18 +1202,21 @@ class WindowWrapper {
 
     let wrapper = this;
     var createDataMonitor = (valueTest, dataKey, propertyName, initialValue) => {
-      initialValue = deepCopy(initialValue);
+      initialValue = (async () => deepCopy(await initialValue))();
       let defaultData = valueTest();
       let data = defaultData;
       let dataChanged = false;
-      browser.sessions.getWindowValue(window.id, dataKey).then((value) => {
-        if (!dataChanged) {
-          if (value === undefined) {
-            if (initialValue) {
-              updateData(initialValue);
-            }
+      browser.sessions.getWindowValue(window.id, dataKey).then(async (value) => {
+        if (dataChanged) {
+          return;
+        }
+        if (value === undefined) {
+          initialValue = await initialValue;
+          if (dataChanged || initialValue === undefined || (await isRestoredWindow)) {
             return;
           }
+          updateData(initialValue);
+        } else {
           setData(value);
         }
       });
@@ -1056,12 +1252,15 @@ class WindowWrapper {
       defineProperty(this, propertyName, getData, setData);
     };
 
+    if (!initialWindowData) {
+      initialWindowData = {};
+    }
     createDataMonitor((value) => {
       if (!value) {
         return '';
       }
       return value;
-    }, windowDataKeys.name, 'windowName', windowName);
+    }, windowDataKeys.name, 'windowName', initialWindowData[windowDataKeys.name]);
     createDataMonitor((value) => {
       if (!value || typeof value !== 'object') {
         value = {};
@@ -1083,7 +1282,7 @@ class WindowWrapper {
         overrideSetting.override = Boolean(overrideSetting.override);
       }
       return value;
-    }, windowDataKeys.settings, 'windowSettings', windowSettings);
+    }, windowDataKeys.settings, 'windowSettings', initialWindowData[windowDataKeys.settings]);
 
     // #endregion Window Data
 
@@ -1107,11 +1306,13 @@ class WindowWrapper {
 
     // #region Title
 
+    let forceTitleUpdate = false;
     let titleUpdateManager = new RequestManager(
       async (value, forceUpdate) => {
-        if (lastTitlePrefix === value && !forceUpdate) {
+        if (lastTitlePrefix === value && !forceTitleUpdate && !forceUpdate) {
           return;
         }
+        forceTitleUpdate = false;
         if (!value || value === '') {
           await clearPrefix();
         } else {
@@ -1120,7 +1321,7 @@ class WindowWrapper {
         }
       },
       blockTime,
-      false,
+      true
     );
 
     let clearPrefix = async () => {
@@ -1166,14 +1367,19 @@ class WindowWrapper {
     let setPrefix = async (value) => {
       titleUpdateManager.invalidate(value);
     };
-    let forceSetPrefix = () => {
+    let forceSetPrefix = (forceUpdateNow = true) => {
       let latestValue = titleUpdateManager.lastArgs;
       if (latestValue.length > 0) {
         latestValue = latestValue[0];
       } else {
         latestValue = lastTitlePrefix;
       }
-      titleUpdateManager.forceUpdate(latestValue, true);
+      if (forceUpdateNow) {
+        titleUpdateManager.forceUpdate(latestValue, true);
+      } else {
+        forceTitleUpdate = true;
+        titleUpdateManager.invalidate(latestValue);
+      }
     };
 
     // #endregion Title
@@ -1253,6 +1459,8 @@ var createWindowFilter = () => {
 var createNewTabFixOptions = () => {
   return {
     isEnabled: settings.newTabNoTitleWorkaround_Enabled,
+    trackHandled: settings.newTabNoTitleWorkaround_TrackHandledTabs,
+
     loadWait: settings.newTabNoTitleWorkaround_LoadWaitInMilliseconds,
     minPrefixWait: settings.newTabNoTitleWorkaround_MinPrefixWaitInMilliseconds,
     reloadWait: settings.newTabNoTitleWorkaround_ReloadWaitInMilliseconds,
@@ -1263,6 +1471,8 @@ let createWindowDataSettings = () => {
     defaultName: settings.windowDefaultName,
     inheritName: settings.windowInheritName,
     inheritSettings: settings.windowInheritSettings,
+
+    trackRestore: settings.windowTrackSessionRestore,
   };
 };
 
@@ -1291,12 +1501,19 @@ new EventListener(settingsTracker.onChange, (changes, storageArea) => {
   if (changes.isEnabled) {
     if (changes.isEnabled.newValue) {
       startTabCounter();
+      return;
     } else {
       stopTabCounter();
     }
   }
 
+
   if (!settings.isEnabled || !windowWrapperCollection) {
+    if (changes.windowTrackSessionRestore) {
+      let keyDataCombo = {};
+      keyDataCombo[windowDataKeys.isRestored] = settings.windowTrackSessionRestore ? true : undefined;
+      WindowWrapperCollection.setWindowData(keyDataCombo);
+    }
     return;
   }
 
@@ -1315,6 +1532,7 @@ new EventListener(settingsTracker.onChange, (changes, storageArea) => {
 
   if (
     changes.newTabNoTitleWorkaround_Enabled ||
+    changes.newTabNoTitleWorkaround_TrackHandledTabs ||
     changes.newTabNoTitleWorkaround_LoadWaitInMilliseconds ||
     changes.newTabNoTitleWorkaround_ReloadWaitInMilliseconds ||
     changes.newTabNoTitleWorkaround_MinPrefixWaitInMilliseconds
@@ -1325,7 +1543,8 @@ new EventListener(settingsTracker.onChange, (changes, storageArea) => {
   if (
     changes.windowDefaultName ||
     changes.windowInheritName ||
-    changes.windowInheritSettings
+    changes.windowInheritSettings ||
+    changes.windowTrackSessionRestore
   ) {
     windowWrapperCollection.windowDataSettings = createWindowDataSettings();
   }
@@ -1466,30 +1685,20 @@ let runtimeListeners = new DisposableCollection([
             return requestPermissionViaBrowserAction(message.permission);
           } break;
           case messageTypes.clearWindowData: {
-            let windows = await browser.windows.getAll();
-            let removeData = async (windowId, dataKey) => {
-              await browser.sessions.removeWindowValue(windowId, dataKey);
-              onWindowDataUpdate.fire(windowId, dataKey, undefined);
-            };
-            let promises = [];
-            for (let window of windows) {
-              for (let key of Object.keys(windowDataKeys)) {
-                promises.push(removeData(window.id, windowDataKeys[key]));
+            let dataKeyValueCombos = {};
+            for (let key of Object.keys(windowDataKeys)) {
+              let dataKey = windowDataKeys[key];
+              if (!message.clearInternalData && dataKey === windowDataKeys.isRestored) {
+                continue;
               }
+              dataKeyValueCombos[dataKey] = undefined;
             }
-            await Promise.all(promises);
+            await WindowWrapperCollection.setWindowData(dataKeyValueCombos);
           } break;
           case messageTypes.applyWindowName: {
-            let windows = await browser.windows.getAll();
-            let setWindowName = async (windowId, value) => {
-              await browser.sessions.setWindowValue(windowId, windowDataKeys.name, value);
-              onWindowDataUpdate.fire(windowId, windowDataKeys.name, value);
-            };
-            let promises = [];
-            for (let window of windows) {
-                promises.push(setWindowName(window.id, message.name));
-            }
-            await Promise.all(promises);
+            let dataKeyValueCombos = {};
+            dataKeyValueCombos[windowDataKeys.name] = message.name && message.name !== '' ? message.name : undefined;
+            await WindowWrapperCollection.setWindowData(dataKeyValueCombos);
           } break;
         }
         return { done: true, value: undefined };

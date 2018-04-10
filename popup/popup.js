@@ -61,7 +61,7 @@ class WindowSessionDataManager {
 
 async function initiatePage() {
     let settings = Settings.get(new Settings());
-    let window = browser.windows.getCurrent();
+    let currentWindow = browser.windows.getCurrent();
 
 
     // #region Window Name
@@ -72,19 +72,38 @@ async function initiatePage() {
     nameArea.classList.add('noMargin');
     document.body.appendChild(nameArea);
 
+    let nameHeaderArea = document.createElement('div');
+    nameHeaderArea.classList.add('nameHeaderArea');
+    nameArea.appendChild(nameHeaderArea);
+
     let nameLabel = document.createElement('label');
     nameLabel.classList.add('windowNameLabel');
     nameLabel.classList.add(messagePrefix + 'popup_WindowName');
-    nameArea.appendChild(nameLabel);
+    nameHeaderArea.appendChild(nameLabel);
 
-    let windowName = document.createElement('input');
+    let optionsShortcut = document.createElement('div');
+    optionsShortcut.classList.add('optionsShortcut');
+    optionsShortcut.setAttribute('title', browser.i18n.getMessage('popup_SettingsShortcutTooltip'));
+    nameHeaderArea.appendChild(optionsShortcut);
+
+    optionsShortcut.addEventListener('click', async (e) => {
+        await browser.runtime.openOptionsPage();
+        await delay(75);
+        window.close();
+    });
+
+    var windowName = document.createElement('input');
     windowName.id = 'windowName';
     windowName.type = 'text';
     nameArea.appendChild(windowName);
 
+    // Set focus to the name input field when popup is opened:
+    // Requires Firefox 60 or later due to bug: https://bugzilla.mozilla.org/show_bug.cgi?id=1324255
+    windowName.focus();
+
 
     let nameDataManager = new WindowSessionDataManager(
-        window,
+        currentWindow,
         windowDataKeys.name,
         (value) => {
             windowName.value = value;
@@ -104,6 +123,7 @@ async function initiatePage() {
     new EventListener(windowName, 'keypress', (e) => {
         if (e.key === "Enter") {
             nameDataManager.updater.unblock();
+            window.close();
         }
     });
 
@@ -114,7 +134,6 @@ async function initiatePage() {
 
     {
         let formatPlaceholderSection = createCollapsableArea();
-        formatPlaceholderSection.content.classList.add('standardFormat');
         formatPlaceholderSection.content.classList.add('textSelectable');
         formatPlaceholderSection.area.classList.add('noShadow');
         formatPlaceholderSection.area.classList.add('formatSection');
@@ -126,23 +145,39 @@ async function initiatePage() {
         header.classList.add(messagePrefix + 'popup_FormatPlaceholders');
         formatPlaceholderSection.title.appendChild(header);
 
+        let formatInfoWrapper = document.createElement('div');
+        formatInfoWrapper.classList.add('formatInfoWrapper');
+        formatPlaceholderSection.content.appendChild(formatInfoWrapper);
+
         let formatPlaceholderArea = document.createElement('div');
         formatPlaceholderArea.classList.add('formatInfo');
-        formatPlaceholderSection.content.appendChild(formatPlaceholderArea);
+        formatInfoWrapper.appendChild(formatPlaceholderArea);
 
-        let isFirst = true;
+        let notNameFormatPlaceholdersArea = document.createElement('div');
+        notNameFormatPlaceholdersArea.classList.add('formatInfo');
+        notNameFormatPlaceholdersArea.classList.add('notNamePlaceholders');
+        formatInfoWrapper.appendChild(notNameFormatPlaceholdersArea);
+
+        let notNameHeader = document.createElement('label');
+        notNameHeader.classList.add(messagePrefix + 'popup_NotNameFormatPlaceholders');
+        notNameHeader.classList.add('notNamePlaceholdersHeader');
+        notNameHeader.classList.add('textNotSelectable');
+        notNameFormatPlaceholdersArea.appendChild(notNameHeader);
+        notNameFormatPlaceholdersArea.appendChild(document.createElement('br'));
+
+        
+        let notNamePlaceholders = [
+            formatPlaceholders.windowName,
+        ];
         for (let placeholder of FormatPlaceholder.all) {
-            if (placeholder === formatPlaceholders.windowName) {
-                continue;
-            }
-            if (!isFirst) {
-                formatPlaceholderArea.appendChild(document.createElement('br'));
-                formatPlaceholderArea.appendChild(document.createElement('br'));
-            }
-            let area = document.createElement('label');
+            let area = document.createElement('div');
+            area.classList.add('formatPlaceholder');
             area.textContent = placeholder.messageText;
-            formatPlaceholderArea.appendChild(area);
-            isFirst = false;
+            if (notNamePlaceholders.includes(placeholder)) {
+                notNameFormatPlaceholdersArea.appendChild(area);
+            } else {
+                formatPlaceholderArea.appendChild(area);
+            }
         }
     }
 
@@ -154,7 +189,7 @@ async function initiatePage() {
     {
         let onLoadedSettings = new EventManager();
         let settingDataManager = new WindowSessionDataManager(
-            window,
+            currentWindow,
             windowDataKeys.settings,
             (value) => {
                 onLoadedSettings.fire(value);
@@ -293,6 +328,23 @@ async function initiatePage() {
     }
 
     // #endregion Setting overrides
+
+
+    // #region Session Restore Tracking
+
+    if (debug.popop_sessionRestoreTracking) {
+        let restoreTracked = createCheckBox();
+        restoreTracked.label.textContent = 'Tracked';
+
+        let trackedData = new WindowSessionDataManager(currentWindow, windowDataKeys.isRestored, (value) => { restoreTracked.checkbox.checked = value; }, (value) => Boolean(value));
+
+        restoreTracked.checkbox.addEventListener('input', (e) => { trackedData.value = restoreTracked.checkbox.checked; });
+
+        document.body.appendChild(restoreTracked.area);
+    }
+
+    // #endregion Session Restore Tracking
+
 
     setTextMessages();
     settings = await settings;

@@ -1,11 +1,12 @@
 {
   "manifest_version": 2,
   "name": "Tab Count in Window Title",
-  "version": "4.1",
+  "version": "4.2",
   "default_locale": "en",
   "applications": {
     "gecko": {
-      "strict_min_version": "56.0"
+      "strict_min_version": "56.0",
+      "id": "{c28e42b2-28b5-45f0-bdc8-6989ae7e6a7e}"
     }
   },
   "options_ui": {

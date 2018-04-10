@@ -47,6 +47,9 @@
     "options_NewTabNoTitleWorkaround_ReloadWait": {
         "message": "Maximum time to wait after reloading new tab page before setting window preface (title preface will be set before this time if the tab completes loading during the waiting period): "
     },
+    "options_NewTabNoTitleWorkaround_TrackHandledTabs": {
+        "message": "Track fixed tabs. Slightly worse performance but minimizes the times that the workaround code is activated."
+    },
     "options_Format": {
         "message": "Window Title Preface Formatting:"
     },
@@ -94,6 +97,9 @@
     "options_WindowData_InheritWindowSettings": {
         "message": "Inherit window settings. If a window has focus when another window is opened then the new window's settings are copied from the focused window."
     },
+    "options_WindowData_TrackSessionRestore": {
+        "message": "Detect session restored windows or re-opened recently closed windows. If this is disabled then windows without data (all checkboxes disabled and all text boxes empty) will be treated as new windows even if they are opened on session restore or are re-opened recently closed windows. This means that they can inherit window name or window settings and will get the default window name."
+    },
     "options_WindowData_ApplyDefaultName_Button": {
         "message": "Reset all window names to the default name"
     },
@@ -137,12 +143,18 @@
         "message": "Window Name"
     },
     "popup_FormatPlaceholders": {
-        "message": "Name Placeholders"
+        "message": "Format Placeholders"
+    },
+    "popup_NotNameFormatPlaceholders": {
+        "message": "Unavailable in window name"
     },
     "popup_SettingsTitle": {
         "message": "Window Settings"
     },
     "popup_SettingsOverride": {
         "message": "Override Setting"
+    },
+    "popup_SettingsShortcutTooltip": {
+        "message": "Settings"
     }
 }

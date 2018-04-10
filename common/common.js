@@ -3,9 +3,14 @@
 
 const messagePrefix = 'message_';
 
+const debug = {
+    popop_sessionRestoreTracking: false,
+};
+
 const windowDataKeys = Object.freeze({
     name: 'name',
     settings: 'settings',
+    isRestored: 'isRestored',
 });
 const messageTypes = Object.freeze({
     windowDataChange: 'windowDataChange',
@@ -41,6 +46,8 @@ class FormatPlaceholder {
 
     static createFormatInfo(titleFormat) {
         return {
+            hasText: titleFormat && titleFormat != '',
+
             useTabCount: formatPlaceholders.tabCount.test(titleFormat),
             useTotalTabCount: formatPlaceholders.totalTabCount.test(titleFormat),
 
@@ -108,7 +115,7 @@ const formatPlaceholders = Object.freeze({
 // #region Utilities
 
 async function delay(timeInMilliseconds) {
-    return await new Promise((resolve, reject) => setTimeout(resolve, timeInMilliseconds));
+    return await new Promise((resolve, reject) => timeInMilliseconds < 0 ? resolve() : setTimeout(resolve, timeInMilliseconds));
 }
 
 let createObjectFromKeys = function (
@@ -230,8 +237,10 @@ class Settings {
             windowDefaultName: '',
             windowInheritName: false,
             windowInheritSettings: false,
+            windowTrackSessionRestore: true,
 
             newTabNoTitleWorkaround_Enabled: false,
+            newTabNoTitleWorkaround_TrackHandledTabs: false,
             newTabNoTitleWorkaround_LoadWaitInMilliseconds: -1,
             newTabNoTitleWorkaround_ReloadWaitInMilliseconds: 10000,
             newTabNoTitleWorkaround_MinPrefixWaitInMilliseconds: -1,

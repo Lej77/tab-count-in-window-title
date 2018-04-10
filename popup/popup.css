@@ -1,37 +1,75 @@
 
-body > * {
-  background-color: white;
-  font: caption;
+html {
+    display: flex;    
 }
-
 body {
+    font: caption;
     width: 200px;
-}
-.background {
-    top: 0px;
-    bottom: 0px;
-    left: 0px;
-    right: 0px;
-    position: absolute;
-    z-index: -1000;
+    flex: 1 0 auto;
     background-color: white;
 }
+
+
+
+
 
 .windowNameArea {
     display: flex;
     flex-flow: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-between;
 
     margin-bottom: 10px;
 }
-.windowNameLabel {
+.nameHeaderArea {
     margin-bottom: 5px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;    
 }
+.windowNameLabel {
+    text-align: center;
+    flex: 1 1 auto;
+}
+
+
+.optionsShortcut {    
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    flex: 0 1 auto;
+    margin-left: -25px;
+    width: 25px;
+    height: 25px;
+    border-radius: 5px;
+
+    background-color: hsla(0, 0%, 0%, 10%);    
+}
+.optionsShortcut:hover {
+    background-color: hsla(0, 0%, 0%, 16%);
+}
+.optionsShortcut:active {
+    background-color: hsla(0, 0%, 0%, 23%);
+}
+.optionsShortcut::after {
+    content: "";
+    position: relative;
+    width: 80%;
+    height: 80%;
+    background-color: hsla(0, 0%, 0%, 50%);
+    mask-image: url("/icons/settings.svg");
+    mask-size: cover;
+}
+
+
 #windowName {
-    width: calc(100% - 10px);
     padding: 5px;
 }
+
+
+
 
 .windowNameLabel,
 .headerArea > * {
@@ -39,9 +77,37 @@ body {
     font-size: 16px;
 }
 
+
+
+
 .formatSection {
     margin-bottom: 10px;
 }
+.formatInfo {
+    padding: 5px;
+    padding-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.formatPlaceholder:not(:first-child) {
+    margin-top: 7px;
+}
+.notNamePlaceholders {
+    border-top: var(--collapsable-border);
+}
+.notNamePlaceholdersHeader {
+    text-align: center;    
+    font-size: 14px;
+
+    align-self: center;
+    
+    margin-bottom: 2px;
+    border-bottom: 1px groove black;
+}
+
+
+
 
 .overrideArea {
     width: 100%;
@@ -54,6 +120,12 @@ body {
     justify-content: center;
     align-items: center;
 }
+
 .overrideSettingArea {
     padding: 5px;
+    display: flex;
+    flex-direction: column;
+}
+.overrideSettingArea > * {
+    flex: 1 1 auto;
 }

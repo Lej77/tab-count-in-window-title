@@ -63,15 +63,10 @@ async function initiatePage() {
 
     {
         let formatPlaceholderArea = document.getElementById('formatPlaceholders');
-        let isFirst = true;
         for (let placeholder of FormatPlaceholder.all) {
-            if (!isFirst) {
-                formatPlaceholderArea.appendChild(document.createElement('br'));
-            }
-            let area = document.createElement('label');
+            let area = document.createElement('div');
             area.textContent = placeholder.messageText;
             formatPlaceholderArea.appendChild(area);
-            isFirst = false;
         }
     }
 

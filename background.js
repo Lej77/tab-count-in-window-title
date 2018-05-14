@@ -1553,200 +1553,71 @@ new EventListener(settingsTracker.onChange, (changes, storageArea) => {
 startTabCounter();
 
 
-let browserActionPermissionRequest = null;
-new EventListener(browser.browserAction.onClicked, (tab) => {
-  if (browserActionPermissionRequest) {
-    browserActionPermissionRequest.onClick(tab);
-  }
+
+var portManager = new PortManager();
+onPermissionsChange.addListener(function () {
+  portManager.fireEvent('permissionChanged', Array.from(arguments));
 });
-var requestPermissionViaBrowserAction = async (permission) => {
-  let closed = false;
-  let isWaiting = false;
-  let promiseWrapper = new PromiseWrapper();
-
-  let myRequest = {
-    onClick: async (tab) => {
-      if (!isWaiting || closed) {
-        return;
-      }
-      try {
-        try {
-          await browser.permissions.request(permission);
-          promiseWrapper.resolve(true);
-        } catch (error) {
-          promiseWrapper.reject(error);
-        }
-      } finally {
-        onPermissionsChange.fire(permission, await browser.permissions.contains(permission));
-      }
-    },
-    close: () => {
-      if (closed) {
-        return;
-      }
-      closed = true;
-      promiseWrapper.reject(new Error('Request canceled.'));
-    }
-  };
-
-  while (browserActionPermissionRequest) {
-    let currentRequest = browserActionPermissionRequest;
-    currentRequest.close();
-    try {
-      await currentRequest.done;
-    } catch (error) { }
-    if (currentRequest === browserActionPermissionRequest) {
-      browserActionPermissionRequest = null;
-    }
-  }
-  browserActionPermissionRequest = myRequest;
-  let complete = async () => {
-    let waitError = null;
-    try {
-      await promiseWrapper.getValue();
-    } catch (error) { waitError = error; }
-    closed = true;
-    try {
-      await browser.browserAction.setBadgeText({ text: '' });
-      await browser.browserAction.setPopup({ popup: null });
-    } finally {
-      if (myRequest === browserActionPermissionRequest) {
-        browserActionPermissionRequest = null;
-      }
-    }
-    if (waitError) {
-      throw waitError;
-    }
-  };
-  myRequest.done = complete();
-
-  let start = async () => {
-    try {
-      if (!permission) {
-        myRequest.close();
-      }
-      if (closed) {
-        return;
-      }
-      await browser.browserAction.setPopup({ popup: '' });
-      if (closed) {
-        return;
-      }
-      await browser.browserAction.setBadgeText({ text: '!' });
-      if (closed) {
-        return;
-      }
-      isWaiting = true;
-    } catch (error) {
-      promiseWrapper.reject(error);
-    }
-  };
-  start();
-  return { close: myRequest.close, value: promiseWrapper.getValue() };
-};
 
 
-
-var openPorts = [];
 let runtimeListeners = new DisposableCollection([
-  new EventListener(browser.runtime.onMessage,
-    async (
-      message,      // object. The message itself. This is a JSON-ifiable object.
-      sender,       // A runtime.MessageSender object representing the sender of the message.
-    ) => {
-      if (!message || !message.type || "string" !== typeof message.type) {
-        return;
-      }
-
-      let getOp = async () => {
-        switch (message.type) {
-          case messageTypes.clearPrefix: {
-            stopTabCounter();
-            await WindowWrapper.clearWindowPrefixes();
-          } break;
-          case messageTypes.updatePrefix: {
-            let forceUpdateAllTitles = () => Promise.all(windowWrapperCollection.array.map(wrapper => wrapper.forceSetTitlePrefix()));
-            if (windowWrapperCollection) {
-              forceUpdateAllTitles();
-            } else {
-              await WindowWrapper.clearWindowPrefixes();
-              if (windowWrapperCollection) {
-                forceUpdateAllTitles();
-              }
-            }
-          } break;
-          case messageTypes.windowDataChange: {
-            onWindowDataUpdate.fire(message.windowId, message.key, message.newValue);
-          } break;
-          case messageTypes.permissionsChanged: {
-            onPermissionsChange.fire(message.permission, message.value);
-          } break;
-          case messageTypes.requestPermission: {
-            return requestPermissionViaBrowserAction(message.permission);
-          } break;
-          case messageTypes.clearWindowData: {
-            let dataKeyValueCombos = {};
-            for (let key of Object.keys(windowDataKeys)) {
-              let dataKey = windowDataKeys[key];
-              if (!message.clearInternalData && dataKey === windowDataKeys.isRestored) {
-                continue;
-              }
-              dataKeyValueCombos[dataKey] = undefined;
-            }
-            await WindowWrapperCollection.setWindowData(dataKeyValueCombos);
-          } break;
-          case messageTypes.applyWindowName: {
-            let dataKeyValueCombos = {};
-            dataKeyValueCombos[windowDataKeys.name] = message.name && message.name !== '' ? message.name : undefined;
-            await WindowWrapperCollection.setWindowData(dataKeyValueCombos);
-          } break;
-        }
-        return { done: true, value: undefined };
-      };
-
-      let ports = [];
-      if (message.portName) {
-        ports = openPorts.filter(p => p.port.name === message.portName);
-      }
-
-      let op = await getOp();
-
-      if (!op.done && message.portName && ports.length > 0) {
-        let onClose = new EventManager();
-        op.onClose = onClose;
-        let waitForDone = async () => {
-          try { await op.value; }
-          catch (error) { }
-          onClose.fire();
-        };
-        for (let port of ports) {
-          port.operations.trackDisposables(op);
-        }
-        waitForDone();
-      }
-
-      return op.value;
+  new EventListener(portManager.onMessage, async (
+    message,      // object. The message itself. This is a JSON-ifiable object.
+    sender,       // A runtime.MessageSender object representing the sender of the message.
+    disposables,  // Collection that will be disposed if the operation is canceled.
+  ) => {
+    if (!message || !message.type || "string" !== typeof message.type) {
+      return;
     }
-  ),
-  new EventListener(browser.runtime.onConnect, (port) => {
-    let operations = new DisposableCollection();
-    let portObj = {
-      port: port,
-      operations: operations,
-    };
-    defineProperty(portObj, 'isDisposed', () => operations.isDisposed);
-
-    openPorts.push(portObj);
-    operations.onDisposed.addListener(() => {
-      openPorts = openPorts.filter((aPort) => aPort !== portObj);
-    });
-
-
-    port.onDisconnect.addListener(() => {
-      operations.dispose();
-    });
-    if (port.error) {
-      operations.dispose();
+    switch (message.type) {
+      case messageTypes.clearPrefix: {
+        stopTabCounter();
+        await WindowWrapper.clearWindowPrefixes();
+      } break;
+      case messageTypes.updatePrefix: {
+        let forceUpdateAllTitles = () => Promise.all(windowWrapperCollection.array.map(wrapper => wrapper.forceSetTitlePrefix()));
+        if (windowWrapperCollection) {
+          forceUpdateAllTitles();
+        } else {
+          await WindowWrapper.clearWindowPrefixes();
+          if (windowWrapperCollection) {
+            forceUpdateAllTitles();
+          }
+        }
+      } break;
+      case messageTypes.windowDataChange: {
+        onWindowDataUpdate.fire(message.windowId, message.key, message.newValue);
+      } break;
+      case messageTypes.permissionsChanged: {
+        onPermissionsChange.fire(message.permission, message.value);
+      } break;
+      case messageTypes.requestPermission: {
+        let requester = new ToolbarPermissionRequest(message.permission);
+        if (disposables && disposables instanceof DisposableCollection) {
+          disposables.trackDisposables(requester);
+        }
+        let result = await requester.result;
+        if (result) {
+          onPermissionsChange.fire(message.permission, await browser.permissions.contains(message.permission));
+        }
+        return result;
+      } break;
+      case messageTypes.clearWindowData: {
+        let dataKeyValueCombos = {};
+        for (let key of Object.keys(windowDataKeys)) {
+          let dataKey = windowDataKeys[key];
+          if (!message.clearInternalData && dataKey === windowDataKeys.isRestored) {
+            continue;
+          }
+          dataKeyValueCombos[dataKey] = undefined;
+        }
+        await WindowWrapperCollection.setWindowData(dataKeyValueCombos);
+      } break;
+      case messageTypes.applyWindowName: {
+        let dataKeyValueCombos = {};
+        dataKeyValueCombos[windowDataKeys.name] = message.name && message.name !== '' ? message.name : undefined;
+        await WindowWrapperCollection.setWindowData(dataKeyValueCombos);
+      } break;
     }
   }),
   new EventListener(browser.runtime.onInstalled,

@@ -60,8 +60,11 @@ class WindowSessionDataManager {
 
 
 async function initiatePage() {
-    let settings = Settings.get(new Settings());
+    let settingsTracker = new SettingsTracker();
+    let settings = settingsTracker.settings;
+
     let currentWindow = browser.windows.getCurrent();
+    let sectionAnimation = {};
 
 
     // #region Window Name
@@ -133,7 +136,7 @@ async function initiatePage() {
     // #region Name Placeholders
 
     {
-        let formatPlaceholderSection = createCollapsableArea();
+        let formatPlaceholderSection = createCollapsableArea(sectionAnimation);
         formatPlaceholderSection.content.classList.add('textSelectable');
         formatPlaceholderSection.area.classList.add('noShadow');
         formatPlaceholderSection.area.classList.add('formatSection');
@@ -165,7 +168,7 @@ async function initiatePage() {
         notNameFormatPlaceholdersArea.appendChild(notNameHeader);
         notNameFormatPlaceholdersArea.appendChild(document.createElement('br'));
 
-        
+
         let notNamePlaceholders = [
             formatPlaceholders.windowName,
         ];
@@ -218,7 +221,7 @@ async function initiatePage() {
             }
         );
 
-        let settingArea = createCollapsableArea();
+        let settingArea = createCollapsableArea(sectionAnimation);
         settingArea.title.classList.add('small');
         settingArea.area.classList.add('noShadow');
         settingArea.area.classList.add('settingArea');
@@ -347,7 +350,20 @@ async function initiatePage() {
 
 
     setTextMessages();
-    settings = await settings;
+    await settingsTracker.start;
+    let checkAnimations = () => {
+        if (settings.disablePopupPageAnimations) {
+            sectionAnimation.update({ reset: true });
+        } else {
+            sectionAnimation.update({ standard: true, collapseBodyImmediately: false });
+        }
+    };
+    settingsTracker.onChange.addListener((changes) => {
+        if (changes.disablePopupPageAnimations) {
+            checkAnimations();
+        }
+    });
+    checkAnimations();
 }
 
 

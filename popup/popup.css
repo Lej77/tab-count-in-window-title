@@ -39,6 +39,8 @@ body {
     justify-content: center;
     align-items: center;
 
+    cursor: pointer;
+
     flex: 0 1 auto;
     margin-left: -25px;
     width: 25px;

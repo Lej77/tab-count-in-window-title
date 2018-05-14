@@ -1,6 +1,7 @@
 
 
-/* Global */
+/* #region Global */
+
 .textSelectable {
     -moz-user-select: text;
 }
@@ -36,10 +37,52 @@
     margin: 3px;
 }
 
+/* #endregion Global */
 
 
 
-/* Tab */
+/* #region Status Indicator */
+
+.statusIndicatorWrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.statusIndicator {
+    color: white;
+    padding: 10px;
+    border: 5px;
+    border-radius: 5px;
+}
+
+.statusIndicator > * {
+    text-align: center;
+    width: 100%;
+}
+
+.statusIndicator:not(.enabled):not(.error) {
+    background-color: red;
+}
+.statusIndicator.enabled:not(.error) {
+    background-color: green;
+}
+.statusIndicator.error {
+    background-color: yellow;
+    color: black;
+}
+
+.statusIndicator:not(.error) > .statusIndicatorError,
+.statusIndicator:-moz-any(:not(.enabled), .error) > .statusIndicatorEnabled,
+.statusIndicator:-moz-any(.enabled, .error) > .statusIndicatorDisabled {
+    display: none;
+}
+
+/* #endregion Status Indicator */
+
+
+
+/* #region Tab */
+
 :root {
     --tab-header-height: 30px;
     --tab-header-border-style: 1px solid;
@@ -117,9 +160,12 @@
     display: none;
 }
 
+/* #endregion Tab */
 
 
-/* List */
+
+/* #region List */
+
 .dragging * {
     cursor: initial !important;    
     -moz-user-select: none;
@@ -193,11 +239,11 @@
     background-color: hsl(196, 61%, 59%);
 }
 
-  
+/* #endregion List */
 
 
 
-/* Collapsable Section */
+/* #region Collapsable Section */
 :root {
     --collapsable-border: 1px solid hsl(0, 0%, 50%);
     --collapsable-header-border: 1px solid hsl(0, 0%, 60%);
@@ -217,37 +263,105 @@
     text-align: center;
 
     display: flex;
+    position: relative;
 
     cursor: pointer;
     
-    transition: background-color var(--enabled-transition-time);
     background-color: hsl(120, 0%, 93%);
-}
-.enablable {    
-    background-color: hsl(120, 80%, 90%) !important;
-}
-.enablable:not(.enabled) {
-    background-color: hsl(0, 80%, 90%) !important;
-}
-.section > .headerArea > * {
-    text-align: center;
-}
-.section > .headerArea * {
-  flex: 0 0 auto;
-  pointer-events: none;
 }
 .section > .contentWrapper > .contentArea {
     border-top: var(--collapsable-header-border);
 }
 
-.section > .contentWrapper {
-    overflow: hidden;
-    height: 100%
-}
-.collapsable:not(.open) > .contentWrapper {
-    height: 0px;
+
+/* #region Header Hover */
+
+.section > .headerArea > .hoverIndicator,
+.section > .headerArea > .hoverIndicator::after {
+    position: absolute;
+    
+    top: 0px;
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
 }
 
+.section > .headerArea > .hoverIndicator {
+    pointer-events: auto !important;
+
+    z-index: 100;
+}
+
+.section > .headerArea > .hoverIndicator::after {
+    content: "";
+    pointer-events: none;
+
+    z-index: 1000;
+
+    background-color: hsl(230, 3%, 60%);
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+.section > .headerArea .hoverIndicator:hover::after {
+    opacity: 0.15;
+}
+
+/* #endregion Header Hover */
+
+
+/* #region Enabled */
+
+.enablable {
+    background-color: hsl(120, 80%, 90%) !important;
+}
+.enablable:not(.enabled) {
+    background-color: hsl(0, 80%, 90%) !important;
+}
+.enablable.enabled.error {
+    background-color: hsl(60, 80%, 90%) !important;
+}
+
+/* #endregion Enabled */
+
+
+/* #region Header children */
+
+.section > .headerArea > * {
+    text-align: center;
+}
+.section > .headerArea * {
+    flex: 0 0 auto;
+
+    pointer-events: none;
+    z-index: 50;
+}
+
+.section > .headerArea *.preventOpen,
+.section > .headerArea *.preventOpen * {
+    pointer-events: all;
+    z-index: 500;
+}
+
+/* #endregion Header children */
+
+
+/* #region Collapsed/Closed */
+
+.section > .contentWrapper {
+    overflow-y: hidden;
+}
+.collapsable.collapsed > .contentWrapper {
+    overflow: hidden;
+    max-height: 0px !important;
+}
+.collapsable:not(.open) > .contentWrapper {
+    display: none;
+}
+
+/* #endregion Collapsed/Closed */
+
+
+/* #region Standard modifiers */
 
 .section > .headerArea.center > *,
 .section > .headerArea > *.center {
@@ -277,9 +391,14 @@
     padding-bottom: 10px;
 }
 
+/* #endregion Standard modifiers */
+
+/* #endregion Collapsable Section */
 
 
- /* Drop Down Button */
+
+/* #region Drop Down Button */
+
 :root {
     --dropDown-button-background: hsl(210, 100%, 100%);
     --dropDown-color: black;
@@ -357,3 +476,74 @@
     padding: 4px 15px;
     padding-left: 25px;
 }
+
+/* #endregion Drop Down Button */
+
+
+
+/* #region Optional Permissions */
+
+.permissionController .permissionHeader {
+    flex: 1 1 auto !important;
+    align-self: center;
+    font-size: 20px;
+}
+
+.permissionController .manageArea {
+    display: flex;
+    padding: 0px;
+    margin: -2px;
+}
+.permissionController .manageArea > *:not(:first-child) {
+    margin-left: -2px;
+}
+
+.permissionController .permissionInfobox {
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 5px;
+    padding-left: 10px;
+    width: 115px;
+    font-size: 15px;
+}
+.permissionController .permissionInfobox *:not(:first-child) {
+  text-align: center;
+  flex: 1 1 auto;
+}
+.permissionController .permissionInfobox {
+    background-color: red;
+}
+.permissionController.granted .permissionInfobox {
+    background-color: green;
+}
+.permissionController.granted .permissionInfobox .notGranted {
+    display: none;
+}
+.permissionController:not(.granted) .permissionInfobox .granted {
+    display: none;
+}
+
+
+:root.prompting > *:not(.prompt) {
+    opacity: 0.6;
+}
+:root.prompting .screenBlocker {
+    background-color: hsla(0, 0%, 0%, 30%);
+}
+
+.browserActionPrompt:not(.active) {
+    display: none;
+}
+.browserActionPrompt {
+    position: absolute;
+    background-color: white;
+    border: 1px solid black;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 5px 5px 10px -1px;
+    width: 80%;
+    left: 10%;
+}
+
+/* #endregion Optional Permissions */

@@ -985,7 +985,7 @@ function createCollapsableArea(animationInfo = {}) {
             Object.assign(animationInfo, standardAnimationInfo);
           }
           delete changes.standard;
-          
+
           Object.assign(animationInfo, changes);
           applyStandardModifiers(animationInfo);
         };
@@ -1046,6 +1046,18 @@ function createCollapsableArea(animationInfo = {}) {
 
   let isCollapsed = true;
   let collapseTimeoutId = null;
+
+  let startCollapseTimeout = (callback, timeInMilliseconds) => {
+    if (collapseTimeoutId !== null) {
+      clearTimeout(collapseTimeoutId);
+    }
+
+    collapseTimeoutId = setTimeout(() => {
+      collapseTimeoutId = null;
+      callback();
+    }, timeInMilliseconds);
+  };
+
   let setCollapsed = (value) => {
     if (isCollapsed === value) {
       return;
@@ -1068,6 +1080,42 @@ function createCollapsableArea(animationInfo = {}) {
       toggleClass(area, 'collapsed', true);
     }
     toggleClass(area, 'open', true);
+
+
+    // Body resizing: 
+
+    let recheckBody = null;
+    if (bodyImmediately) {
+      if (value || document.body.style.minHeight) {
+        document.body.style.minHeight = document.body.offsetHeight + 'px';
+      } else {
+        let getMinBodyHeight = () => {
+          return document.body.scrollHeight - contentWrapper.clientHeight + contentWrapper.scrollHeight;
+        };
+
+        let minBodyHeight = getMinBodyHeight();
+        document.body.style.minHeight = minBodyHeight + 'px';
+
+        recheckBody = () => {
+          let recheckedHeight = getMinBodyHeight();
+          if (recheckedHeight === minBodyHeight) {
+            return;
+          }
+
+          document.documentElement.style.minHeight = minBodyHeight + 'px';
+
+          document.body.style.minHeight = null;
+          minBodyHeight = getMinBodyHeight();
+          document.body.style.minHeight = minBodyHeight + 'px';
+  
+          document.documentElement.style.minHeight = null;
+        };
+      }
+    }
+
+
+    // Apply section animation properties:
+
     let wantedHeight = contentWrapper.scrollHeight;
 
 
@@ -1085,41 +1133,37 @@ function createCollapsableArea(animationInfo = {}) {
 
     contentWrapper.style.transition = transition;
     contentWrapper.style.maxHeight = wantedHeight + 'px';
-    if (bodyImmediately) {
-      if (value) {
-        document.body.style.minHeight = document.body.scrollHeight + 'px';
-      } else {
-        let minBodyHeight = document.body.scrollHeight - contentWrapper.clientHeight + wantedHeight;
-        if (minBodyHeight > document.body.style.minHeight) {
-          document.body.style.minHeight = minBodyHeight + 'px';
-        }
-      }
-    }
 
-
-    startTimeout = (callback, timeInMilliseconds) => {
-      if (collapseTimeoutId !== null) {
-        clearTimeout(collapseTimeoutId);
-      }
-
-      collapseTimeoutId = setTimeout(() => {
-        collapseTimeoutId = null;
-        callback();
-      }, timeInMilliseconds);
-    };
 
     // Ensure that max height is applied:
     contentWrapper.clientHeight;
+
     // Then start height change:
     toggleClass(area, 'collapsed', value);
 
     // Handle change completed:
-    startTimeout(() => {
+    let handleCompleted = () => {
       toggleClass(area, 'open', !value);
       contentWrapper.style.maxHeight = null;
       contentWrapper.style.transition = null;
       document.body.style.minHeight = null;
-    }, duration + delay);
+    };
+    let totalAnimationTime = duration + delay;
+    let startCompletionHandling = (startDelay = 0) => startCollapseTimeout(handleCompleted, totalAnimationTime - startDelay);
+
+    // Recheck body or wait for completion:
+    if (recheckBody) {
+      let checkDelay = 20;
+      if (checkDelay > totalAnimationTime) {
+        checkDelay = totalAnimationTime;
+      }
+      startCollapseTimeout(() => {
+        recheckBody();
+        startCompletionHandling(checkDelay);
+      }, checkDelay);
+    } else {
+      startCompletionHandling();
+    }
   };
   setCollapsed(isCollapsed);
 

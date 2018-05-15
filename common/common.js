@@ -45,15 +45,13 @@ class FormatPlaceholder {
   }
 
   static createFormatInfo(titleFormat) {
-    return {
+    let info = {
       hasText: titleFormat && titleFormat != '',
-
-      useTabCount: formatPlaceholders.tabCount.test(titleFormat),
-      useTotalTabCount: formatPlaceholders.totalTabCount.test(titleFormat),
-
-      useWindowName: formatPlaceholders.windowName.test(titleFormat),
-      useCount: formatPlaceholders.count.test(titleFormat),
     };
+    Object.keys(formatPlaceholders).forEach((placeholderKey) => {
+      info['use' + placeholderKey[0].toUpperCase() + placeholderKey.slice(1)] = formatPlaceholders[placeholderKey].test(titleFormat);
+    });
+    return info;
   }
 
   static combineFormatInfos(formatInfos) {
@@ -107,6 +105,13 @@ const formatPlaceholders = Object.freeze({
 
   windowName: new FormatPlaceholder('%WindowName%', 'options_FormatPlaceholders_WindowName'),                 // User defined window name.
   count: new FormatPlaceholder('%Count%', 'options_FormatPlaceholders_Count'),                                // Unique identifier. Starts as 1 and increments untill unique.
+
+
+  firefoxVersion: new FormatPlaceholder('%FirefoxVersion%', 'options_FormatPlaceholders_FirefoxVersion'),     // Firefox version: string representing the browser's version, for example "51.0" or "51.0a2".
+  firefoxBuildId: new FormatPlaceholder('%FirefoxBuildId%', 'options_FormatPlaceholders_FirefoxBuildId'),     // Firefox build id: string representing the specific build of the browser, for example "20161018004015".
+
+  platformOS: new FormatPlaceholder('%OS%', 'options_FormatPlaceholders_OS'),                                 // The platform's operating system.
+  platformArchitecture: new FormatPlaceholder('%Architecture%', 'options_FormatPlaceholders_Architecture'),   // The platform's processor architecture.
 });
 
 

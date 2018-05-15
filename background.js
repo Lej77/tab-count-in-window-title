@@ -981,8 +981,16 @@ class WindowWrapperCollection {
 
       let prefix = (format
         .replace(formatPlaceholders.windowName.regExp, wrapper.windowName)
+
         .replace(formatPlaceholders.tabCount.regExp, wrapper.tabCount)
         .replace(formatPlaceholders.totalTabCount.regExp, cachedTotalTabCount)
+
+
+        .replace(formatPlaceholders.firefoxVersion.regExp, browserInfo.version)
+        .replace(formatPlaceholders.firefoxBuildId.regExp, browserInfo.buildID)
+        
+        .replace(formatPlaceholders.platformOS.regExp, platformInfo.os)
+        .replace(formatPlaceholders.platformArchitecture.regExp, platformInfo.arch)
       );
       if (formatPlaceholders.count.test(prefix)) {
         let initialPrefix = prefix;
@@ -1435,10 +1443,17 @@ class WindowWrapper {
 
 
 
+var browserInfo = browser.runtime.getBrowserInfo();
+var platformInfo = browser.runtime.getPlatformInfo();
 
 var settingsTracker = new SettingsTracker();
 var settings = settingsTracker.settings;
 
+var waitForLoad = async () => {
+  browserInfo = await browserInfo;
+  platformInfo = await platformInfo;
+  await settingsTracker.start;
+};
 
 
 var createWindowFilter = () => {
@@ -1478,7 +1493,7 @@ let createWindowDataSettings = () => {
 
 var windowWrapperCollection;
 let startTabCounter = async () => {
-  await settingsTracker.start;
+  await waitForLoad();
   if (!windowWrapperCollection && settings.isEnabled) {
     windowWrapperCollection = new WindowWrapperCollection(
       settings.timeBetweenUpdatesInMilliseconds,

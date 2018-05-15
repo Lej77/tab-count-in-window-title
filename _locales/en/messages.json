@@ -85,6 +85,38 @@
             }
         }
     },
+    "options_FormatPlaceholders_FirefoxVersion": {
+        "message": "$placeholder$: Firefox version, for example \"51.0\" or \"51.0a2\".",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
+    "options_FormatPlaceholders_FirefoxBuildId": {
+        "message": "$placeholder$: Firefox build id representing the specific build of the browser, for example \"20161018004015\".",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
+    "options_FormatPlaceholders_OS": {
+        "message": "$placeholder$: The platform's operating system.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
+    "options_FormatPlaceholders_Architecture": {
+        "message": "$placeholder$: The platform's processor architecture.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
     "options_WindowData_Header": {
         "message": "Window Data"
     },
@@ -132,6 +164,9 @@
     },
     "popup_FormatPlaceholders": {
         "message": "Format Placeholders"
+    },
+    "popup_FormatPlaceholders_PlatformInfo": {
+        "message": "Platform Info"
     },
     "popup_NotNameFormatPlaceholders": {
         "message": "Unavailable in window name"

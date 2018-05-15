@@ -1,14 +1,14 @@
 
 html {
-    display: flex;    
+    display: flex;
+    align-items: flex-start;
 }
 body {
     font: caption;
     width: 200px;
-    flex: 1 0 auto;
+    flex: 1 1 auto;
     background-color: white;
 }
-
 
 
 
@@ -95,12 +95,20 @@ body {
 .formatPlaceholder:not(:first-child) {
     margin-top: 7px;
 }
+.formatInfoWrapper .section {
+    margin-left: 5px;
+    margin-right: 5px;
+}
+.formatInfoWrapper .section .contentArea {
+    padding: 5px;
+}
+
 .notNamePlaceholders {
     border-top: var(--collapsable-border);
 }
 .notNamePlaceholdersHeader {
     text-align: center;    
-    font-size: 14px;
+    font-size: 13px;
 
     align-self: center;
     

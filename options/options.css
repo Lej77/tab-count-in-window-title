@@ -50,6 +50,7 @@ body {
 }
 #formatPlaceholders > * {
   cursor: text;
+  margin-top: 5px;
 }
 
 #windowDefaultName,

@@ -64,6 +64,7 @@ function setTextMessages(elementsToText = null) {
 }
 
 function bindElementIdsToSettings(settings, createListeners = true) {
+  let listeners = [];
   for (let key of Object.keys(settings)) {
     let element = document.getElementById(key);
     if (!element) {
@@ -79,11 +80,12 @@ function bindElementIdsToSettings(settings, createListeners = true) {
 
     element[propertyName] = settings[key];
     if (createListeners) {
-      element.addEventListener("input", e => {
+      listeners.push(new EventListener(element, "input", (e) => {
         Settings.set(key, e.target[propertyName]);
-      });
+      }));
     }
   }
+  return listeners;
 }
 
 function toggleClass(element, className, enabled) {
@@ -141,29 +143,46 @@ function createNumberInput(message, min = 0, newLine = false) {
 }
 
 
-function createStatusIndicator(headerMessage, enabledMessage, disabledMessage, errorMessage = null) {
+function createStatusIndicator({ headerMessage, enabledMessage, disabledMessage, errorMessage = null, newLine = true, standardFormat = true, fill = false } = {}) {
   let areaWrapper = document.createElement('div');
   areaWrapper.classList.add('statusIndicatorWrapper');
 
   let area = document.createElement('div');
   area.classList.add('statusIndicator');
   area.classList.add('textNotSelectable');
+  if (newLine) {
+    area.classList.add('newLine');
+  }
+  if (standardFormat) {
+    area.classList.add('standardFormat');
+  }
+  if (fill) {
+    area.classList.add('fill');
+  }
   areaWrapper.appendChild(area);
 
-  let createSubelement = (className, message = null) => {
+
+  let createSubelement = (parentArea, className, message = null) => {
     let node = document.createElement('div');
     node.classList.add(className);
     if (message) {
       node.classList.add(messagePrefix + message);
     }
-    area.appendChild(node);
+    parentArea.appendChild(node);
     return node;
   };
 
-  createSubelement('statusIndicatorHeader', headerMessage);
-  createSubelement('statusIndicatorEnabled', enabledMessage);
-  createSubelement('statusIndicatorDisabled', disabledMessage);
-  createSubelement('statusIndicatorError', errorMessage);
+  createSubelement(area, 'statusIndicatorHeader', headerMessage);
+
+
+  let valueArea = document.createElement('div');
+  valueArea.classList.add('statusIndicatorValues');
+  area.appendChild(valueArea);
+
+
+  createSubelement(valueArea, 'statusIndicatorEnabled', enabledMessage);
+  createSubelement(valueArea, 'statusIndicatorDisabled', disabledMessage);
+  createSubelement(valueArea, 'statusIndicatorError', errorMessage);
 
 
   let obj = {
@@ -294,6 +313,7 @@ function createListArea() {
     let dragInfo = null;
     let stopDrag = (canceled = true) => {
       document.documentElement.classList.remove('dragging');
+      toggleScreenBlocker(false);
       if (trackingEventCollection) {
         trackingEventCollection.dispose();
       }
@@ -351,6 +371,7 @@ function createListArea() {
         dropList: dragListObj,
       };
       document.documentElement.classList.add('dragging');
+      toggleScreenBlocker(true);
 
       dragItemObj.section.isCollapsed = true;
 
@@ -686,6 +707,15 @@ function createListArea() {
     if (!itemObj) {
       return;
     }
+    if (index < 0) {
+      index = itemObjs.length + (itemObjs.includes(itemObj) ? -1 : 0);
+    }
+    if (index < 0 || index > itemObjs.length) {
+      index = itemObjs.length;
+    }
+    if (itemObjs.indexOf(itemObj) === index) {
+      return;
+    }
 
     getAllItems();  // Update itemObjs array.
     let previousList = itemObj.list;
@@ -711,25 +741,24 @@ function createListArea() {
     onItemArrayChange.fire(obj, itemObj, index);
   };
   var addItem = (itemObj) => {
-    if (itemObjs.includes(itemObj)) {
-      return;
-    }
     insertItem(itemObj);
   };
   var removeItem = (itemObj) => {
+    let wasInList = false;
     if (Array.from(area.children).includes(itemObj.area)) {
       area.removeChild(itemObj.area);
+      wasInList = true;
     }
 
     if (itemObj.list) {
       itemObjs = itemObjs.filter(item => item !== itemObj);
-    } else {
-      itemObj.remove();
     }
-    onItemArrayChange.fire(obj, itemObj, false);
+    if (wasInList) {
+      onItemArrayChange.fire(obj, itemObj, false);
+    }
   };
 
-  var createItem = () => {
+  var createItem = (animationInfo) => {
     let itemObj = {};
     let onListChange = new EventManager();
     let onRemoved = new EventManager();
@@ -743,7 +772,7 @@ function createListArea() {
     itemSectionWrapper.classList.add('sectionWrapper');
     item.appendChild(itemSectionWrapper);
 
-    let itemSection = createCollapsableArea();
+    let itemSection = createCollapsableArea(animationInfo);
     itemSectionWrapper.appendChild(itemSection.area);
 
     let dropMarkerAfter = document.createElement('div');
@@ -752,13 +781,13 @@ function createListArea() {
 
     let dragWrapper = document.createElement('div');
     dragWrapper.classList.add('listItemDragWrapper');
+    dragWrapper.classList.add('preventOpen');
     itemSection.title.appendChild(dragWrapper);
 
     let draggableArea = document.createElement('div');
     draggableArea.classList.add('dragIcon');
     draggableArea.classList.add('listItemDrag');
     draggableArea.classList.add('draggable');
-    draggableArea.classList.add('preventOpen');
     dragWrapper.appendChild(draggableArea);
 
     for (let iii = 0; iii < 3; iii++) {
@@ -881,7 +910,7 @@ function createListArea() {
 
     onArrayChanged: onItemArrayChange.subscriber,   // Args: listObj, itemObj, newIndexOrFalseIfRemoved
     onRemoved: onRemoved.subscriber,                // Fired when this list is removed from the document. Args: listObj
-    onCheckDrop: onCheckListDrop.subscriber,
+    onCheckDrop: onCheckListDrop.subscriber,        // Return true to allow drop. Args: dropItemObj
   });
   defineProperty(obj, 'items', getAllItems);
   return obj;
@@ -1031,12 +1060,12 @@ function createCollapsableArea(animationInfo = {}) {
 
   headerArea.addEventListener('click', (e) => {
     let ele = e.target;
-    while (ele) {
+    while (true) {
+      if (!ele || ele.classList.contains('preventOpen')) {
+        return;
+      }
       if (ele === headerArea) {
         break;
-      }
-      if (ele.classList.contains('preventOpen')) {
-        return;
       }
       ele = ele.parentElement;
     }
@@ -1046,18 +1075,6 @@ function createCollapsableArea(animationInfo = {}) {
 
   let isCollapsed = true;
   let collapseTimeoutId = null;
-
-  let startCollapseTimeout = (callback, timeInMilliseconds) => {
-    if (collapseTimeoutId !== null) {
-      clearTimeout(collapseTimeoutId);
-    }
-
-    collapseTimeoutId = setTimeout(() => {
-      collapseTimeoutId = null;
-      callback();
-    }, timeInMilliseconds);
-  };
-
   let setCollapsed = (value) => {
     if (isCollapsed === value) {
       return;
@@ -1080,42 +1097,6 @@ function createCollapsableArea(animationInfo = {}) {
       toggleClass(area, 'collapsed', true);
     }
     toggleClass(area, 'open', true);
-
-
-    // Body resizing: 
-
-    let recheckBody = null;
-    if (bodyImmediately) {
-      if (value || document.body.style.minHeight) {
-        document.body.style.minHeight = document.body.offsetHeight + 'px';
-      } else {
-        let getMinBodyHeight = () => {
-          return document.body.scrollHeight - contentWrapper.clientHeight + contentWrapper.scrollHeight;
-        };
-
-        let minBodyHeight = getMinBodyHeight();
-        document.body.style.minHeight = minBodyHeight + 'px';
-
-        recheckBody = () => {
-          let recheckedHeight = getMinBodyHeight();
-          if (recheckedHeight === minBodyHeight) {
-            return;
-          }
-
-          document.documentElement.style.minHeight = minBodyHeight + 'px';
-
-          document.body.style.minHeight = null;
-          minBodyHeight = getMinBodyHeight();
-          document.body.style.minHeight = minBodyHeight + 'px';
-  
-          document.documentElement.style.minHeight = null;
-        };
-      }
-    }
-
-
-    // Apply section animation properties:
-
     let wantedHeight = contentWrapper.scrollHeight;
 
 
@@ -1133,37 +1114,41 @@ function createCollapsableArea(animationInfo = {}) {
 
     contentWrapper.style.transition = transition;
     contentWrapper.style.maxHeight = wantedHeight + 'px';
+    if (bodyImmediately) {
+      if (value) {
+        document.body.style.minHeight = document.body.scrollHeight + 'px';
+      } else {
+        let minBodyHeight = document.body.scrollHeight - contentWrapper.clientHeight + wantedHeight;
+        if (minBodyHeight > document.body.style.minHeight) {
+          document.body.style.minHeight = minBodyHeight + 'px';
+        }
+      }
+    }
 
+
+    let startTimeout = (callback, timeInMilliseconds) => {
+      if (collapseTimeoutId !== null) {
+        clearTimeout(collapseTimeoutId);
+      }
+
+      collapseTimeoutId = setTimeout(() => {
+        collapseTimeoutId = null;
+        callback();
+      }, timeInMilliseconds);
+    };
 
     // Ensure that max height is applied:
     contentWrapper.clientHeight;
-
     // Then start height change:
     toggleClass(area, 'collapsed', value);
 
     // Handle change completed:
-    let handleCompleted = () => {
+    startTimeout(() => {
       toggleClass(area, 'open', !value);
       contentWrapper.style.maxHeight = null;
       contentWrapper.style.transition = null;
       document.body.style.minHeight = null;
-    };
-    let totalAnimationTime = duration + delay;
-    let startCompletionHandling = (startDelay = 0) => startCollapseTimeout(handleCompleted, totalAnimationTime - startDelay);
-
-    // Recheck body or wait for completion:
-    if (recheckBody) {
-      let checkDelay = 20;
-      if (checkDelay > totalAnimationTime) {
-        checkDelay = totalAnimationTime;
-      }
-      startCollapseTimeout(() => {
-        recheckBody();
-        startCompletionHandling(checkDelay);
-      }, checkDelay);
-    } else {
-      startCompletionHandling();
-    }
+    }, duration + delay);
   };
   setCollapsed(isCollapsed);
 
@@ -1578,13 +1563,6 @@ function createOptionalPermissionArea({ permission, titleMessage, explanationMes
   section.title.classList.add('noFontChanges');
   section.title.classList.add('enablable');
 
-  let permissionChanged = (modifiedPermission = false) => {
-    toggleClass(section.area, 'granted', hasPermission);
-    toggleClass(section.title, 'enabled', hasPermission);
-
-    onHasPermissionChanged.fire(obj, modifiedPermission);
-  };
-
 
   let manageArea = document.createElement('div');
   manageArea.classList.add('manageArea');
@@ -1608,23 +1586,16 @@ function createOptionalPermissionArea({ permission, titleMessage, explanationMes
   section.title.appendChild(permissionHeader);
 
 
-  let permissionInfobox = document.createElement('div');
-  permissionInfobox.classList.add('permissionInfobox');
-  section.title.appendChild(permissionInfobox);
-
-  let infoText = document.createElement('div');
-  infoText.classList.add(messagePrefix + 'optionalPermissions_Available');
-  permissionInfobox.appendChild(infoText);
-
-  let grantedInfo = document.createElement('div');
-  grantedInfo.classList.add('granted');
-  grantedInfo.classList.add(messagePrefix + 'optionalPermissions_Granted');
-  permissionInfobox.appendChild(grantedInfo);
-
-  let removedInfo = document.createElement('div');
-  removedInfo.classList.add('notGranted');
-  removedInfo.classList.add(messagePrefix + 'optionalPermissions_NotGranted');
-  permissionInfobox.appendChild(removedInfo);
+  let permissionIndicator = createStatusIndicator({
+    headerMessage: 'optionalPermissions_Available',
+    enabledMessage: 'optionalPermissions_Granted',
+    disabledMessage: 'optionalPermissions_NotGranted',
+    newLine: false,
+    standardFormat: false,
+    fill: true,
+  });
+  permissionIndicator.area.classList.add('permissionIndicator');
+  section.title.appendChild(permissionIndicator.area);
 
 
   let explanation = document.createElement('div');
@@ -1634,6 +1605,14 @@ function createOptionalPermissionArea({ permission, titleMessage, explanationMes
   explanation.classList.add('textSelectable');
   section.content.appendChild(explanation);
 
+
+  let permissionChanged = (modifiedPermission = false) => {
+    toggleClass(section.area, 'granted', hasPermission);
+    toggleClass(section.title, 'enabled', hasPermission);
+    permissionIndicator.isEnabled = hasPermission;
+
+    onHasPermissionChanged.fire(obj, modifiedPermission);
+  };
 
   let start = async () => {
     hasPermission = await browser.permissions.contains(permission);
@@ -1726,4 +1705,3 @@ function createOptionalPermissionArea({ permission, titleMessage, explanationMes
   obj.start = start();
   return obj;
 }
-

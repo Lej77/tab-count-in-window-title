@@ -291,6 +291,7 @@ async function initiatePage() {
 
       let area = document.createElement('div');
       area.classList.add('area');
+      area.classList.add('overideSettingArea');
       area.classList.add('noMargin');
       area.classList.add('noPadding');
 

@@ -81,3 +81,51 @@ body {
 
 
 
+
+.commandsArea {
+    margin-top: 15px;
+}
+
+.commandArea {
+    display: flex;
+    z-index: 1000 !important;
+}
+
+.commandArea label {
+    text-align: center;
+    flex: 1 1 auto !important;
+}
+
+.commandArea > .inputArea {
+    display: flex;
+
+    margin: -2px;
+
+    z-index: 1000 !important;
+    pointer-events: auto;
+}
+.commandArea > .inputArea * {
+    flex: 1 1 auto;
+}
+
+.commandArea input[type="text"] {
+    width: 200px;
+    margin-right: 5px;
+    margin-left: -1px;
+
+    padding-left: 10px;
+}
+
+.commandArea button {
+    text-align: center;
+}
+.commandArea button:first-of-type {
+    margin-right: -2px;
+}
+
+
+
+
+
+
+

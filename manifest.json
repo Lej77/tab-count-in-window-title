@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Tab Count in Window Title",
-  "version": "4.4",
+  "version": "4.5",
   "default_locale": "en",
   "applications": {
     "gecko": {
@@ -36,6 +36,10 @@
         "dark": "icons/popup-16-light.png",
         "size": 16
       }
-    ]
+    ],
+    "browser_style": false
+  },
+  "commands": {
+    "_execute_browser_action": {}
   }
 }

@@ -357,7 +357,7 @@ class WindowWrapperCollection {
     var newTabNoTitleFixListeners = null;
     let newTabNoTitleFix_SetTrackHandled = null;
     var startNewTabNoTitleFixListeners = () => {
-      if (newTabNoTitleFixListeners) {
+      if (newTabNoTitleFixListeners && !newTabNoTitleFixListeners.isDisposed) {
         let callback = newTabNoTitleFix_SetTrackHandled;
         if (callback && typeof callback === 'function') {
           let shouldTrackHandledTabs = getNewTabFix_TrackHandledTabs();
@@ -617,7 +617,7 @@ class WindowWrapperCollection {
         listeners.trackDisposables(trackingListeners);
       };
 
-      new EventListener(listeners.onDisposed, () => {
+      listeners._onDisposed.addListener(() => {
         if (listeners === newTabNoTitleFixListeners) {
           newTabNoTitleFixListeners = null;
         }

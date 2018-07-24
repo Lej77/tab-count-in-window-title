@@ -151,6 +151,35 @@ async function delay(timeInMilliseconds) {
   return await new Promise((resolve, reject) => timeInMilliseconds < 0 ? resolve() : setTimeout(resolve, timeInMilliseconds));
 }
 
+/**
+ * A delay that will be canceled if a disposable collection is disposed.
+ * 
+ * @param {number} timeInMilliseconds Time in milliseconds to wait.
+ * @param {DisposableCollection} [disposables=null] Disposables collection to bind delay to.
+ * @returns {boolean} True if successful. False if canceled.
+ */
+async function boundDelay(timeInMilliseconds, disposables = null) {
+  if (!disposables) {
+    await delay(timeInMilliseconds);
+    return true;
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      let timeout = new Timeout(() => {
+        resolve(true);
+      }, timeInMilliseconds);
+      timeout.onDisposed.addListener(() => {
+        resolve(false);
+      });
+      if (disposables) {
+        disposables.trackDisposables(timeout);
+      }
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 let createObjectFromKeys = function (
   keys,                   // array of strings.
   values,                 // object, or array of objects.
@@ -431,35 +460,52 @@ class SettingsTracker {
  * @class EventListener
  */
 class EventListener {
-  constructor(DOMElementOrEventObject, eventNameOrCallback, callback) {
-    let onClose = new EventManager();
-    this.onClose = onClose.subscriber;
 
-    if (typeof eventNameOrCallback === 'string' && typeof callback === 'function') {
+  /**
+   * Creates an instance of EventListener.
+   * @param {any} DOMElementOrEventObject If DOM event: the DOM object to listen on. Otherwise: the event object to add a listener to.
+   * @param {any} eventNameOrCallback If DOM event: the name of the event. Otherwise: callback.
+   * @param {any} callbackOrExtraParameters If DOM event: callback. Otherwise: optional extra paramater for the add listener function.
+   * @memberof EventListener
+   */
+  constructor(DOMElementOrEventObject, eventNameOrCallback, callbackOrExtraParameters = null) {
+    Object.assign(this, {
+      _onClose: null,
+    });
+
+    if (typeof eventNameOrCallback === 'string' && typeof callbackOrExtraParameters === 'function') {
       this._DOMElement = DOMElementOrEventObject;
       this._event = eventNameOrCallback;
-      this._callback = callback;
+      this._callback = callbackOrExtraParameters;
     } else {
       this._event = DOMElementOrEventObject;
       this._callback = eventNameOrCallback;
+      this._extraParameter = callbackOrExtraParameters;
     }
+
     if (this._DOMElement) {
       this._DOMElement.addEventListener(this._event, this._callback);
     } else {
-      this._event.addListener(this._callback);
-    }
-
-    this.close = function () {
-      if (this._callback) {
-        if (this._DOMElement) {
-          this._DOMElement.removeEventListener(this._event, this._callback);
-        } else {
-          this._event.removeListener(this._callback);
-        }
-        this._callback = null;
-        onClose.fire(this);
+      if (this._extraParameter) {
+        this._event.addListener(this._callback, this._extraParameter);
+      } else {
+        this._event.addListener(this._callback);
       }
-    };
+    }
+  }
+
+  close() {
+    if (this._callback) {
+      if (this._DOMElement) {
+        this._DOMElement.removeEventListener(this._event, this._callback);
+      } else {
+        this._event.removeListener(this._callback);
+      }
+      this._callback = null;
+      if (this._onClose) {
+        this._onClose.fire(this);
+      }
+    }
   }
 
   get isDisposed() {
@@ -471,6 +517,13 @@ class EventListener {
     } else {
       return this._event.hasListener(this._callback);
     }
+  }
+
+  get onClose() {
+    if (!this._onClose) {
+      this._onClose = new EventManager();
+    }
+    return this._onClose.subscriber;
   }
 }
 
@@ -542,11 +595,11 @@ class EventManager extends EventSubscriber {
     let returned = [];
     if (this._listeners.length > 0) {
       let args = Array.from(arguments);
-      for (let listener of this._listeners) {
+      for (let listener of this._listeners.slice()) {
         try {
           returned.push(listener.apply(null, args));
         } catch (error) {
-          console.log('Error during event handling!\n', error);
+          console.log('Error during event handling!\n', error, '\nStack Trace:\n', error.stack);
         }
       }
     }
@@ -919,6 +972,20 @@ class Timeout {
   }
 
   // #endregion Dispose
+
+  get promise() {
+    return new Promise((resolve, reject) => {
+      if (this.isDisposed) {
+        resolve();
+      } else {
+        this.onDisposed.addListener(resolve);
+      }
+    });
+  }
+
+  get callback() {
+    return this._callback;
+  }
 
 }
 
@@ -1324,7 +1391,11 @@ class DisposableCollection {
     let disposables = Array.from(this._trackedDisposables);
     this.untrackDisposables(disposables);
     for (let disposable of disposables) {
-      DisposableCollection.disposeOfObject(disposable);
+      try {
+        DisposableCollection.disposeOfObject(disposable);
+      } catch (error) {
+        console.log('Failed to dispose of object.', '\nObject: ', disposable, '\nError: ', error, '\nStack Trace:\n', error.stack);
+      }
     }
   }
 
@@ -1504,7 +1575,17 @@ class DisposableCreators {
    * @memberof DisposableCreators
    */
   get isDelaying() {
-    return !Boolean(this.disposableCollection);
+    return !this.isStarted;
+  }
+
+  /**
+   * Creators have been called and any new creaters will be created immediately.
+   * 
+   * @readonly
+   * @memberof DisposableCreators
+   */
+  get isStarted() {
+    return Boolean(this.disposableCollection);
   }
 
   get isDisposed() {
@@ -1573,7 +1654,7 @@ class PortManager {
     try {
       await firstDefined;
     } catch (error) {
-      console.log('Error on async runtime message handling\n', error);
+      console.log('Error on async runtime message handling\n', error, '\nStack Trace:\n', error.stack);
     }
     disposables.dispose();
     return firstDefined;

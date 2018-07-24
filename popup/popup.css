@@ -1,13 +1,14 @@
 
+
 html {
     display: flex;
     align-items: flex-start;
+    background-color: white;
 }
 body {
     font: caption;
     width: 200px;
     flex: 1 1 auto;
-    background-color: white;
 }
 
 
@@ -119,6 +120,9 @@ body {
 
 
 
+.overideSettingArea {    
+    box-shadow: inset 0px 0px 4px -1px;
+}
 .overrideArea {
     width: 100%;
     border-bottom: 1px solid black;
@@ -130,7 +134,6 @@ body {
     justify-content: center;
     align-items: center;
 }
-
 .overrideSettingArea {
     padding: 5px;
     display: flex;

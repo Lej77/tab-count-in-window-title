@@ -177,14 +177,33 @@ async function initiatePage() {
             };
         });
 
-        let keyLookup = {
+        // See: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/manifest.json/commands#Shortcut_values
+        const keyLookup = {
             ',': 'Comma',
             '.': 'Period',
             ' ': 'Space',
             // Home, End, PageUp, PageDown, Space, Insert, Delete, Up, Down, Left, Right
         };
 
-        let fixKey = (key) => {
+        // See: https://developer.mozilla.org/docs/Web/API/KeyboardEvent/getModifierState
+        const modifierKeys = {
+            alt: 'Alt',
+            ctrl: 'Control',
+            capsLock: 'CapsLock',
+            fn: 'Fn',
+            fnLock: 'FnLock',
+            hyper: 'Hyper',
+            meta: 'Meta',
+            numLock: 'NumLock',
+            os: 'OS',
+            scrollLock: 'ScrollLock',
+            shift: 'Shift',
+            super: 'Super',
+            symbol: 'Symbol',
+            symbolLock: 'SymbolLock',
+        };
+
+        const fixKey = (key) => {
             key = key.charAt(0).toUpperCase() + key.toString().slice(1);
             if (key.startsWith('Arrow')) {
                 key = key.slice(5);
@@ -196,14 +215,14 @@ async function initiatePage() {
             return key;
         };
 
-        let createShortcutArea = async (command) => {
+        const createShortcutArea = async (command) => {
             let { isMac = false } = await platformInfo;
             let commandInfo = commandInfos[command.name] || {};
 
 
             let commandSection = createCollapsableArea(sectionAnimation);
             commandSection.area.classList.add('standardFormat');
-            commandSection.title.classList.add('center');
+            commandSection.title.classList.add('stretch');
             commandSection.title.classList.add('enablable');
             commandsArea.appendChild(commandSection.area);
 
@@ -254,13 +273,13 @@ async function initiatePage() {
             inputField.value = command.shortcut;
 
 
-            let checkCommand = () => {
+            const checkCommand = () => {
                 toggleClass(commandSection.title, 'enabled', command.shortcut);
             };
             checkCommand();
 
 
-            let updateShortcut = async () => {
+            const updateShortcut = async () => {
                 let [afterUpdate,] = (await browser.commands.getAll()).filter(com => com.name === command.name);
                 if (afterUpdate) {
                     Object.assign(command, afterUpdate);
@@ -280,17 +299,20 @@ async function initiatePage() {
             });
 
             promptButton.addEventListener('click', async (e) => {
-                let value = prompt(browser.i18n.getMessage('options_Commands_PromptButton_Description'), command.shortcut || '');
+                const value = prompt(browser.i18n.getMessage('options_Commands_PromptButton_Description'), command.shortcut || '');
 
                 await browser.commands.update({
                     name: command.name,
-                    shortcut: value || null,
+                    shortcut: value,
                 });
 
                 updateShortcut();
             });
 
-            inputField.addEventListener('keypress', async (e) => {
+            inputField.addEventListener('keydown', async (e) => {
+                if (Object.values(modifierKeys).includes(e.key))
+                    return;
+
                 let keys = [];
                 if (e.ctrlKey) {
                     keys.push(isMac ? 'MacCtrl' : 'Ctrl');

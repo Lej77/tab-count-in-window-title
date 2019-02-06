@@ -50,6 +50,7 @@ body {
 
     background-color: hsla(0, 0%, 0%, 10%);    
 }
+.optionsShortcut:focus,
 .optionsShortcut:hover {
     background-color: hsla(0, 0%, 0%, 16%);
 }

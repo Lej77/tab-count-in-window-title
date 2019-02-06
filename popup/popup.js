@@ -86,13 +86,23 @@ async function initiatePage() {
 
   let optionsShortcut = document.createElement('div');
   optionsShortcut.classList.add('optionsShortcut');
+  optionsShortcut.setAttribute('tabindex', 0);
+  optionsShortcut.setAttribute('role', 'button');
   optionsShortcut.setAttribute('title', browser.i18n.getMessage('popup_SettingsShortcutTooltip'));
   nameHeaderArea.appendChild(optionsShortcut);
 
-  optionsShortcut.addEventListener('click', async (e) => {
+  const openSettings = async () => {
     await browser.runtime.openOptionsPage();
     await delay(75);
     window.close();
+  };
+  optionsShortcut.addEventListener('click', (e) => openSettings());
+  optionsShortcut.addEventListener('keydown', (e) => {
+    // 13 = Return, 32 = Space
+    if (![13, 32].includes(e.keyCode))
+      return;
+
+    openSettings();
   });
 
   var windowName = document.createElement('input');
@@ -196,6 +206,7 @@ async function initiatePage() {
       {
         area: notNameFormatPlaceholdersArea,
         placeholders: [
+          formatPlaceholders.ifWindowName,
           formatPlaceholders.windowName,
         ],
       },
@@ -204,7 +215,7 @@ async function initiatePage() {
     for (let placeholder of FormatPlaceholder.all) {
       let area = document.createElement('div');
       area.classList.add('formatPlaceholder');
-      area.textContent = placeholder.messageText;
+      area.innerHTML = placeholder.messageText;
 
       let placed = false;
       for (let placeholderSection of placeholderSections) {

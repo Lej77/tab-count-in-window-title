@@ -10,7 +10,11 @@ async function initiatePage() {
 
     var eventStarters = new DisposableCreators();
     var startListener = (callback) => eventStarters.createDisposable(callback);
-    var startAllListeners = () => eventStarters.start();
+    var startAllListeners = () => {
+        eventStarters.stop();
+        eventStarters.start();
+    };
+    startListener(() => bindElementIdsToSettings(settings));
 
     // #endregion Delayed Listener Startup
 
@@ -39,7 +43,7 @@ async function initiatePage() {
         let formatPlaceholderArea = document.getElementById('formatPlaceholders');
         for (let placeholder of FormatPlaceholder.all) {
             let area = document.createElement('div');
-            area.textContent = placeholder.messageText;
+            area.innerHTML = placeholder.messageText;
             formatPlaceholderArea.appendChild(area);
         }
     }
@@ -128,232 +132,19 @@ async function initiatePage() {
     // #region Commands
 
     {
-        let section = createCollapsableArea(sectionAnimation);
-        section.area.classList.add('standardFormat');
-        section.title.classList.add('center');
-        section.title.classList.add('enablable');
-        document.body.appendChild(section.area);
-
-        let header = document.createElement('div');
-        header.classList.add(messagePrefix + 'options_Commands_Title');
-        section.title.appendChild(header);
-
-        section.content.classList.add('commandsContentArea');
-
-
-        let information = document.createElement('div');
-        information.classList.add(messagePrefix + 'options_Commands_Info');
-        section.content.appendChild(information);
-
-
-        section.content.appendChild(document.createElement('br'));
-
-
-        let commandsArea = document.createElement('div');
-        commandsArea.classList.add('commandsArea');
-        section.content.appendChild(commandsArea);
-
-
-        var allCommands = [];
-        let checkCommands = () => {
-            let enabled = allCommands.some(command => command.shortcut);
-            toggleClass(section.title, 'enabled', enabled);
-        };
-
-
-        let commandInfos = {
-            '_execute_browser_action': {
-                description: 'options_Commands_BrowserAction',
-                createContent: () => {
-                    return null;
+        const { area, update } = createCommandArea({
+            sectionAnimationInfo: sectionAnimation,
+            commandInfos: {
+                '_execute_browser_action': {
+                    description: 'options_Commands_BrowserAction',
+                    createContent: () => {
+                        return null;
+                    },
                 },
-            },
-        };
-
-
-        let platformInfo = browser.runtime.getPlatformInfo().then(({ os, arch }) => {
-            return {
-                isMac: os.toLowerCase() === 'mac',
-            };
+            }
         });
-
-        // See: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/manifest.json/commands#Shortcut_values
-        const keyLookup = {
-            ',': 'Comma',
-            '.': 'Period',
-            ' ': 'Space',
-            // Home, End, PageUp, PageDown, Space, Insert, Delete, Up, Down, Left, Right
-        };
-
-        // See: https://developer.mozilla.org/docs/Web/API/KeyboardEvent/getModifierState
-        const modifierKeys = {
-            alt: 'Alt',
-            ctrl: 'Control',
-            capsLock: 'CapsLock',
-            fn: 'Fn',
-            fnLock: 'FnLock',
-            hyper: 'Hyper',
-            meta: 'Meta',
-            numLock: 'NumLock',
-            os: 'OS',
-            scrollLock: 'ScrollLock',
-            shift: 'Shift',
-            super: 'Super',
-            symbol: 'Symbol',
-            symbolLock: 'SymbolLock',
-        };
-
-        const fixKey = (key) => {
-            key = key.charAt(0).toUpperCase() + key.toString().slice(1);
-            if (key.startsWith('Arrow')) {
-                key = key.slice(5);
-            }
-            let fixedKey = keyLookup[key];
-            if (fixedKey) {
-                key = fixedKey;
-            }
-            return key;
-        };
-
-        const createShortcutArea = async (command) => {
-            let { isMac = false } = await platformInfo;
-            let commandInfo = commandInfos[command.name] || {};
-
-
-            let commandSection = createCollapsableArea(sectionAnimation);
-            commandSection.area.classList.add('standardFormat');
-            commandSection.title.classList.add('stretch');
-            commandSection.title.classList.add('enablable');
-            commandsArea.appendChild(commandSection.area);
-
-            {
-                let contentArea = null;
-                if (commandInfo.createContent && typeof commandInfo.createContent === 'function') {
-                    contentArea = commandInfo.createContent();
-                }
-                if (contentArea) {
-                    commandSection.content.appendChild(contentArea);
-                } else {
-                    commandSection.title.classList.add('preventOpen');
-                }
-            }
-
-
-            let area = document.createElement('div');
-            area.classList.add('commandArea');
-            commandSection.title.appendChild(area);
-
-            let inputsArea = document.createElement('div');
-            inputsArea.classList.add('inputArea');
-            inputsArea.classList.add('preventOpen');
-            area.appendChild(inputsArea);
-
-            let resetButton = document.createElement('button');
-            resetButton.classList.add(messagePrefix + 'options_Commands_ResetButton');
-            inputsArea.appendChild(resetButton);
-
-            let promptButton = document.createElement('button');
-            promptButton.classList.add(messagePrefix + 'options_Commands_PromptButton');
-            inputsArea.appendChild(promptButton);
-
-            let inputField = document.createElement('input');
-            inputField.type = "text";
-            inputField.readOnly = true;
-            inputsArea.appendChild(inputField);
-
-            let description = document.createElement('label');
-            if (commandInfo.description) {
-                description.classList.add(messagePrefix + commandInfo.description);
-            } else {
-                description.textContent = command.name;
-            }
-            area.appendChild(description);
-
-
-            inputField.value = command.shortcut;
-
-
-            const checkCommand = () => {
-                toggleClass(commandSection.title, 'enabled', command.shortcut);
-            };
-            checkCommand();
-
-
-            const updateShortcut = async () => {
-                let [afterUpdate,] = (await browser.commands.getAll()).filter(com => com.name === command.name);
-                if (afterUpdate) {
-                    Object.assign(command, afterUpdate);
-                }
-                inputField.value = command.shortcut;
-
-                checkCommand();
-                checkCommands();
-            };
-            eventStarters.createDisposable(() => {
-                updateShortcut();
-            });
-
-            resetButton.addEventListener('click', async (e) => {
-                await browser.commands.reset(command.name);
-                updateShortcut();
-            });
-
-            promptButton.addEventListener('click', async (e) => {
-                const value = prompt(browser.i18n.getMessage('options_Commands_PromptButton_Description'), command.shortcut || '');
-
-                await browser.commands.update({
-                    name: command.name,
-                    shortcut: value,
-                });
-
-                updateShortcut();
-            });
-
-            inputField.addEventListener('keydown', async (e) => {
-                if (Object.values(modifierKeys).includes(e.key))
-                    return;
-
-                let keys = [];
-                if (e.ctrlKey) {
-                    keys.push(isMac ? 'MacCtrl' : 'Ctrl');
-                }
-                if (e.altKey) {
-                    keys.push('Alt');
-                }
-                if (e.metaKey) {
-                    keys.push('Command');
-                }
-                if (e.shiftKey) {
-                    keys.push('Shift');
-                }
-                keys.push(fixKey(e.key));
-
-                await browser.commands.update({
-                    name: command.name,
-                    shortcut: keys.join('+'),
-                });
-
-                updateShortcut();
-            });
-        };
-
-
-        // Create areas for all commands:
-        browser.commands.getAll().then(async (commands) => {
-            for (let command of commands) {
-                await createShortcutArea(command);
-            }
-
-            setTextMessages(section.content);
-            allCommands = commands;
-            eventStarters.createDisposable(() => {
-                checkCommands();
-            });
-
-            if (eventStarters.isStarted) {
-                eventStarters.stop();
-                eventStarters.start();
-            }
+        eventStarters.createDisposable(() => {
+            update();
         });
     }
 
@@ -449,10 +240,25 @@ async function initiatePage() {
 
     document.body.appendChild(document.getElementById('otherSettings'));
 
+    document.getElementById('resetSettingsButton').addEventListener('click', async (e) => {
+        let ok = confirm(browser.i18n.getMessage('options_resetSettings_Prompt'));
+        if (!ok) {
+            return;
+        }
+
+        // Reset commands:
+        await Promise.all((await browser.commands.getAll()).map(command => browser.commands.reset(command.name)));
+
+        // Clear settings:
+        await browser.storage.local.clear();
+
+        // Reload options info:
+        startAllListeners();
+    });
+
 
     setTextMessages();
     await settingsTracker.start;
-    bindElementIdsToSettings(settings);
     startAllListeners();
 
     let checkAnimations = () => {

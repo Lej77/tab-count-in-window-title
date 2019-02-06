@@ -22,38 +22,168 @@ const messageTypes = Object.freeze({
   applyWindowName: 'applyWindowName',
 });
 
-
 class FormatPlaceholder {
-  constructor(format, message, regExpFlags = "ig") {
-    this.format = format;
-    this.regExp = new RegExp(format, regExpFlags);
+  constructor(format, message, { regExpFlags = 'ig' } = {}) {
+    const createRegExp = (string) => new RegExp(string.replace('(', '\\(').replace(')', '\\)'), regExpFlags);
+    if (typeof format === 'object') {
+      const { start, args = [], end } = format;
+      const separators = args.filter((val, index) => index % 2 === 1);
+      Object.assign(this, {
+        start,
+        startRegExp: createRegExp(start),
+
+        args,
+        separators,
+        separatorsRegExp: separators.map(sep => createRegExp(sep)),
+
+        end,
+        endRegExp: createRegExp(end),
+      });
+      this.isFunction = true;
+      this.format = start + args.join('') + end;
+    } else {
+      this.format = format;
+      this.regExp = createRegExp(this.format);
+      this.isFunction = false;
+    }
+
     this.message = message;
     this.messageText = '';
-    try {
-      this.messageText = browser.i18n.getMessage(message, format);
-    } catch (error) {
-      console.log('Failed to get format placeholder message', error);
+
+    if (message) {
+      try {
+        this.messageText = browser.i18n.getMessage(message, this.format);
+      } catch (error) {
+        console.error('Failed to get format placeholder message!\nMessage: ', message, '\nError: ', error);
+      }
     }
   }
 
+  /**
+   * Apply this placeholder to a string.
+   *
+   * @param {*} text The text to apply the placeholder to.
+   * @param {string|function} valueOrCallback Either the string to replace the placeholder with or a function that lazily determines the string. If a function is used it will also be passed string arguments if the placeholder requires that.
+   * @returns {string} The text after the placeholder has been replaced.
+   * @memberof FormatPlaceholder
+   */
+  apply(text, valueOrCallback) {
+    if (!text || typeof text !== 'string')
+      return text;
+    const isCallback = valueOrCallback && typeof valueOrCallback === 'function';
+    if (!this.isFunction) {
+      let value = valueOrCallback;
+      if (isCallback) {
+        if (this.test(text)) {
+          value = valueOrCallback();
+        } else {
+          return text;
+        }
+      }
+      return text.replace(this.regExp, value);
+    } else {
+      if (!isCallback)
+        return text;
+
+      let processedText = '';
+      let unprocessedText = text;
+      let searchText = text;
+      const requestText = (textToFind, regExp) => {
+        const index = regExp ? searchText.search(regExp) : searchText.indexOf(textToFind);
+        if (index < 0)
+          return null;
+        const endIndex = index + textToFind.length;
+        const found = searchText.slice(0, index);
+        searchText = searchText.slice(endIndex);
+        return found;
+      };
+
+      while (true) {
+        const beforePlaceholder = requestText(this.start, this.startRegExp);
+        if (beforePlaceholder === null)
+          break;
+
+        let args = [];
+        for (let iii = 0; iii < this.separators.length && iii < this.separatorsRegExp.length; iii++) {
+          let value = requestText(this.separators[iii], this.separatorsRegExp[iii]);
+          if (value === null) {
+            args = null;
+            break;
+          } else {
+            args.push(value);
+          }
+        }
+        if (!args)
+          break;
+
+        let lastArg = requestText(this.end, this.endRegExp);
+        if (lastArg === null)
+          break;
+        if (this.args.length > 0) {
+          args.push(lastArg);
+        } else if (lastArg !== '')
+          break;
+
+        const replacement = valueOrCallback(...args);
+
+        // Update return text:
+        processedText += beforePlaceholder + replacement;
+        unprocessedText = searchText;
+      }
+      return processedText + unprocessedText;
+    }
+  }
+
+  /**
+   * Tests if this format placeholder is present in some text.
+   *
+   * @param {string} string The string that should be checked for the placeholder.
+   * @returns {boolean} True 
+   * @memberof FormatPlaceholder
+   */
   test(string) {
     if (!string || typeof string !== 'string') {
       return false;
     } else {
-      return string.search(this.regExp) >= 0;
+      if (this.regExp) {
+        return string.search(this.regExp) >= 0;
+      } else {
+        let found = false;
+        this.apply(string, () => {
+          found = true;
+          return '';
+        });
+        return found;
+      }
     }
   }
 
+  /**
+   * Gets info about a string that contains FormatPlaceholders.
+   *
+   * @static
+   * @param {string} titleFormat A string that contains placeholders.
+   * @returns {Object} Info about the string and the placeholders that it contains.
+   * @memberof FormatPlaceholder
+   */
   static createFormatInfo(titleFormat) {
-    let info = {
+    const info = {
       hasText: titleFormat && titleFormat != '',
     };
-    Object.keys(formatPlaceholders).forEach((placeholderKey) => {
-      info['use' + placeholderKey[0].toUpperCase() + placeholderKey.slice(1)] = formatPlaceholders[placeholderKey].test(titleFormat);
-    });
+    for (const [key, value] of Object.entries(formatPlaceholders)) {
+      info['use' + key[0].toUpperCase() + key.slice(1)] = value.test(titleFormat);
+    }
     return info;
   }
 
+  /**
+   * Gets info about a collection of FormatInfo objects.
+   *
+   * @static
+   * @param {string|Object|Array} formatInfos A string or array of strings to collect format info about.
+   * @returns {Object} An object that contains info about the placeholders in some strings.
+   * @memberof FormatPlaceholder
+   */
   static combineFormatInfos(formatInfos) {
     if (!formatInfos) {
       return;
@@ -85,7 +215,7 @@ class FormatPlaceholder {
           formatInfo = FormatPlaceholder.combineFormatInfos(formatInfo);
         }
       }
-      for (let key of Object.keys(formatInfo)) {
+      for (const key of Object.keys(formatInfo)) {
         if (formatInfo[key]) {
           combined[key] = formatInfo[key];
         }
@@ -95,13 +225,23 @@ class FormatPlaceholder {
   }
 
   static get all() {
-    return Object.keys(formatPlaceholders).map(placeholderKey => formatPlaceholders[placeholderKey]);
+    return Object.values(formatPlaceholders);
   }
 }
 
 const formatPlaceholders = Object.freeze({
   tabCount: new FormatPlaceholder('%TabCount%', 'options_FormatPlaceholders_TabCount'),                       // Tab count in current window.
   totalTabCount: new FormatPlaceholder('%TotalTabCount%', 'options_FormatPlaceholders_TotalTabCount'),        // Total tab count.
+
+  // Different placeholders for when window name is defined or not.
+  ifWindowName: new FormatPlaceholder(
+    {
+      start: '%IfWindowName(',
+      args: ['True', ',', 'False'],
+      end: ')%',
+    },
+    'options_FormatPlaceholders_IfWindowName'
+  ),
 
   windowName: new FormatPlaceholder('%WindowName%', 'options_FormatPlaceholders_WindowName'),                 // User defined window name.
   count: new FormatPlaceholder('%Count%', 'options_FormatPlaceholders_Count'),                                // Unique identifier. Starts as 1 and increments untill unique.
@@ -123,7 +263,7 @@ const defaultValues = Object.freeze({
       dontSetPrivateWindowTitles: true,                           // Don't set window prefixes in private windows.
 
       timeBetweenUpdatesInMilliseconds: 100,
-      windowPrefixFormat: '[%TabCount%] ',
+      windowPrefixFormat: '[%TabCount%] %WindowName% %IfWindowName(| ,)%',
 
       windowDefaultName: '',
       windowInheritName: false,
@@ -599,7 +739,7 @@ class EventManager extends EventSubscriber {
         try {
           returned.push(listener.apply(null, args));
         } catch (error) {
-          console.log('Error during event handling!\n', error, '\nStack Trace:\n', error.stack);
+          console.error('Error during event handling!\n', error, '\nStack Trace:\n', error.stack);
         }
       }
     }
@@ -1394,7 +1534,7 @@ class DisposableCollection {
       try {
         DisposableCollection.disposeOfObject(disposable);
       } catch (error) {
-        console.log('Failed to dispose of object.', '\nObject: ', disposable, '\nError: ', error, '\nStack Trace:\n', error.stack);
+        console.error('Failed to dispose of object.', '\nObject: ', disposable, '\nError: ', error, '\nStack Trace:\n', error.stack);
       }
     }
   }
@@ -1654,7 +1794,7 @@ class PortManager {
     try {
       await firstDefined;
     } catch (error) {
-      console.log('Error on async runtime message handling\n', error, '\nStack Trace:\n', error.stack);
+      console.error('Error on async runtime message handling\n', error, '\nStack Trace:\n', error.stack);
     }
     disposables.dispose();
     return firstDefined;

@@ -24,7 +24,7 @@
         "message": " milliseconds."
     },
     "options_AllowInPrivateWindows": {
-        "message": "Don't count tabs in private windows."
+        "message": "Don't count tabs that are in private windows."
     },
     "options_DontSetWindowTitleInPrivateWindows": {
         "message": "Don't set title's for private windows."
@@ -66,6 +66,20 @@
         "placeholders": {
             "placeholder": {
                 "content": "$1"
+            }
+        }
+    },
+    "options_FormatPlaceholders_IfWindowName": {
+        "message": "$placeholder$: where <b>$False$</b> and <b>$True$</b> can be any text. This placeholder will be replace with the <b>$False$</b> text if the window name is empty and the <b>$True$</b> text if the window name isn't empty.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            },
+            "true": {
+                "content": "True"
+            },
+            "false": {
+                "content": "False"
             }
         }
     },
@@ -176,6 +190,12 @@
     },
     "options_Animations_PopupPage": {
         "message": "Disable animations on popup page."
+    },
+    "options_resetSettings": {
+        "message": "Reset Settings"
+    },
+    "options_resetSettings_Prompt": {
+        "message": "Do you want to reset all settings to default values?"
     },
     "popup_WindowName": {
         "message": "Window Name"

@@ -40,7 +40,7 @@ function toggleBrowserActionPrompt(value, yPos = null) {
 
 // #region Basic
 
-function setTextMessages(elementsToText = null) {
+function setTextMessages(elementsToText = null, { asHTML = true } = {}) {
   if (!Array.isArray(elementsToText)) {
     let rootElement = document;
     if (elementsToText) {
@@ -51,12 +51,16 @@ function setTextMessages(elementsToText = null) {
       elementsToText.push(rootElement);
     }
   }
-  for (let i = 0; i < elementsToText.length; i++) {
-    let ele = elementsToText[i];
-    for (let c of ele.classList) {
+  for (const ele of elementsToText) {
+    for (const c of ele.classList) {
       if (c.length > messagePrefix.length && c.startsWith(messagePrefix)) {
-        let messageId = c.substring(messagePrefix.length);
-        ele.textContent = browser.i18n.getMessage(messageId);
+        const messageId = c.substring(messagePrefix.length);
+        const message = browser.i18n.getMessage(messageId);
+        if (asHTML) {
+          ele.innerHTML = message;
+        } else {
+          ele.textContent = message;
+        }
         break;
       }
     }
@@ -1058,6 +1062,26 @@ function createCollapsableArea(animationInfo = {}) {
   contentWrapper.appendChild(contentArea);
 
 
+  let isButton = false;
+  // Make header behave as a button:
+  const setIsButton = (value) => {
+    value = Boolean(value);
+    if (isButton === value) {
+      return;
+    }
+
+    if (value) {
+      headerArea.setAttribute('tabindex', 0);
+      headerArea.setAttribute('role', 'button');
+    } else {
+      headerArea.removeAttribute('tabindex');
+      headerArea.removeAttribute('role');
+    }
+
+    isButton = value;
+  };
+  setIsButton(true);
+
   headerArea.addEventListener('click', (e) => {
     let ele = e.target;
     while (true) {
@@ -1069,6 +1093,20 @@ function createCollapsableArea(animationInfo = {}) {
       }
       ele = ele.parentElement;
     }
+    setCollapsed(!isCollapsed);
+  });
+  headerArea.addEventListener('keydown', (e) => {
+    if (e.target !== headerArea)
+      return;
+    if (!isButton)
+      return;
+    if (e.target.classList.contains('preventOpen'))
+      return;
+
+    // 13 = Return, 32 = Space
+    if (![13, 32].includes(e.keyCode))
+      return;
+
     setCollapsed(!isCollapsed);
   });
 
@@ -1158,6 +1196,7 @@ function createCollapsableArea(animationInfo = {}) {
     title: headerArea,
     content: contentArea,
   };
+  defineProperty(obj, 'isButton', () => isButton, setIsButton);
   defineProperty(obj, 'isCollapsed', () => isCollapsed, setCollapsed);
   defineProperty(obj, 'animationInfo', () => animationInfo, setAnimationInfo);
   return obj;
@@ -1547,6 +1586,236 @@ function createTabArea() {
 }
 
 // #endregion Basic Components
+
+
+function createCommandArea({ sectionAnimationInfo = {}, commandInfos = {} } = {}) {
+  const callbacks = [];
+
+  let section = createCollapsableArea(sectionAnimationInfo);
+  section.area.classList.add('standardFormat');
+  section.title.classList.add('center');
+  section.title.classList.add('enablable');
+  document.body.appendChild(section.area);
+
+  let header = document.createElement('div');
+  header.classList.add(messagePrefix + 'options_Commands_Title');
+  section.title.appendChild(header);
+
+  section.content.classList.add('commandsContentArea');
+
+
+  let information = document.createElement('div');
+  information.classList.add(messagePrefix + 'options_Commands_Info');
+  section.content.appendChild(information);
+
+
+  section.content.appendChild(document.createElement('br'));
+
+
+  let commandsArea = document.createElement('div');
+  commandsArea.classList.add('commandsArea');
+  section.content.appendChild(commandsArea);
+
+
+  var allCommands = [];
+  let checkCommands = () => {
+    let enabled = allCommands.some(command => command.shortcut);
+    toggleClass(section.title, 'enabled', enabled);
+  };
+
+
+  const platformInfo = browser.runtime.getPlatformInfo().then(({ os, arch }) => {
+    return {
+      isMac: os.toLowerCase() === 'mac',
+    };
+  });
+
+  // See: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/manifest.json/commands#Shortcut_values
+  const keyLookup = {
+    ',': 'Comma',
+    '.': 'Period',
+    ' ': 'Space',
+    // Home, End, PageUp, PageDown, Space, Insert, Delete, Up, Down, Left, Right
+  };
+
+  // See: https://developer.mozilla.org/docs/Web/API/KeyboardEvent/getModifierState
+  const modifierKeys = {
+    alt: 'Alt',
+    ctrl: 'Control',
+    capsLock: 'CapsLock',
+    fn: 'Fn',
+    fnLock: 'FnLock',
+    hyper: 'Hyper',
+    meta: 'Meta',
+    numLock: 'NumLock',
+    os: 'OS',
+    scrollLock: 'ScrollLock',
+    shift: 'Shift',
+    super: 'Super',
+    symbol: 'Symbol',
+    symbolLock: 'SymbolLock',
+  };
+
+  const fixKey = (key) => {
+    key = key.charAt(0).toUpperCase() + key.toString().slice(1);
+    if (key.startsWith('Arrow')) {
+      key = key.slice(5);
+    }
+    let fixedKey = keyLookup[key];
+    if (fixedKey) {
+      key = fixedKey;
+    }
+    return key;
+  };
+
+  const createShortcutArea = async (command) => {
+    let { isMac = false } = await platformInfo;
+    let commandInfo = commandInfos[command.name] || {};
+
+
+    let commandSection = createCollapsableArea(sectionAnimationInfo);
+    commandSection.area.classList.add('standardFormat');
+    commandSection.title.classList.add('stretch');
+    commandSection.title.classList.add('enablable');
+    commandsArea.appendChild(commandSection.area);
+
+
+    {
+      let contentArea = null;
+      if (commandInfo.createContent && typeof commandInfo.createContent === 'function')
+        contentArea = commandInfo.createContent();
+
+      if (contentArea)
+        commandSection.content.appendChild(contentArea);
+      else {
+        commandSection.title.classList.add('preventOpen');
+        commandSection.isButton = false;
+      }
+    }
+
+
+    let area = document.createElement('div');
+    area.classList.add('commandArea');
+    commandSection.title.appendChild(area);
+
+    let inputsArea = document.createElement('div');
+    inputsArea.classList.add('inputArea');
+    inputsArea.classList.add('preventOpen');
+    area.appendChild(inputsArea);
+
+    let resetButton = document.createElement('button');
+    resetButton.classList.add(messagePrefix + 'options_Commands_ResetButton');
+    inputsArea.appendChild(resetButton);
+
+    let promptButton = document.createElement('button');
+    promptButton.classList.add(messagePrefix + 'options_Commands_PromptButton');
+    inputsArea.appendChild(promptButton);
+
+    let inputField = document.createElement('input');
+    inputField.type = "text";
+    inputField.readOnly = true;
+    inputsArea.appendChild(inputField);
+
+    let description = document.createElement('label');
+    if (commandInfo.description) {
+      description.classList.add(messagePrefix + commandInfo.description);
+    } else {
+      description.textContent = command.name;
+    }
+    area.appendChild(description);
+
+
+    inputField.value = command.shortcut;
+
+
+    const checkCommand = () => {
+      toggleClass(commandSection.title, 'enabled', command.shortcut);
+    };
+    checkCommand();
+
+
+    const updateShortcut = async () => {
+      let [afterUpdate,] = (await browser.commands.getAll()).filter(com => com.name === command.name);
+      if (afterUpdate) {
+        Object.assign(command, afterUpdate);
+      }
+      inputField.value = command.shortcut;
+
+      checkCommand();
+      checkCommands();
+    };
+    callbacks.push(() => updateShortcut());
+
+    resetButton.addEventListener('click', async (e) => {
+      await browser.commands.reset(command.name);
+      updateShortcut();
+    });
+
+    promptButton.addEventListener('click', async (e) => {
+      const value = prompt(browser.i18n.getMessage('options_Commands_PromptButton_Description'), command.shortcut || '');
+
+      await browser.commands.update({
+        name: command.name,
+        shortcut: value,
+      });
+
+      updateShortcut();
+    });
+
+    inputField.addEventListener('keydown', async (e) => {
+      if (Object.values(modifierKeys).includes(e.key))
+        return;
+
+      let keys = [];
+      if (e.ctrlKey) {
+        keys.push(isMac ? 'MacCtrl' : 'Ctrl');
+      }
+      if (e.altKey) {
+        keys.push('Alt');
+      }
+      if (e.metaKey) {
+        keys.push('Command');
+      }
+      if (e.shiftKey) {
+        keys.push('Shift');
+      }
+      keys.push(fixKey(e.key));
+
+      await browser.commands.update({
+        name: command.name,
+        shortcut: keys.join('+'),
+      });
+
+      updateShortcut();
+    });
+  };
+
+
+  // Create areas for all commands:
+  browser.commands.getAll().then(async (commands) => {
+    for (let command of commands) {
+      await createShortcutArea(command);
+    }
+
+    setTextMessages(section.content);
+    allCommands = commands;
+
+    callbacks.push(() => checkCommands());
+    checkCommands();
+  });
+
+  setTextMessages(section.area);
+
+  return {
+    area: section.area,
+    update: () => {
+      for (let callback of callbacks) {
+        callback();
+      }
+    },
+    sectionAnimationInfo,
+  };
+}
 
 
 function createOptionalPermissionArea({ permission, titleMessage, explanationMessage, permissionChangedCallback, onPermissionChanged, requestViaBrowserActionCallback, sectionAnimationInfo = {} } = {}) {

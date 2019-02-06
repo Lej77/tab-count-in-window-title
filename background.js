@@ -413,8 +413,8 @@ class WindowWrapperCollection {
       ];
       let handleNewPage = async (tab, justCreated = false) => {
         // Some new tab pages has a title and some don't:
-        // # New tab pages opened in private winows allways have titles and they are allways shown.
-        // # New tab pages opened in new tabs needs to be reloaded to have a tilte and then the window title needs to be updated for it to be shown. The tab doesn't need to be reloaded if the tab was opened in a new window.
+        // # New tab pages opened in private windows always have titles and they are always shown.
+        // # New tab pages opened in new tabs needs to be reloaded to have a title and then the window title needs to be updated for it to be shown. The tab doesn't need to be reloaded if the tab was opened in a new window.
         // # New tab pages navigated to have a title but the window title needs to be updated before it is shown.
 
         // Window title is only updated at certain times:
@@ -959,7 +959,10 @@ class WindowWrapperCollection {
 
     let allowed = this.windowFilter(this, filterType.title);
     let updated = [];
-    let usedPrefixes = allowed.filter((wrapper) => !windowWrappers.includes(wrapper)).map(wrapper => wrapper.lastTitlePrefix);
+    let usedPrefixes = allowed
+      .filter((wrapper) => !windowWrappers.includes(wrapper))       // Only include wrappers that are not going to be updated.
+      .map(wrapper => wrapper.cachedUsedPrefixForCountPlaceholder || ''); // Get the last prefix format used for the %Count% placeholder.
+
     for (let wrapper of this.array) {
       if (!windowWrappers.includes(wrapper)) {
         continue;
@@ -974,24 +977,20 @@ class WindowWrapperCollection {
 
       let overrides = wrapper.overrideFormatInfo.useOverride ? wrapper.windowSettings : null;
 
-      let format = cachedFormat;
+      let prefix = cachedFormat;
+      let useIfWindowName = this.formatInfo.useIfWindowName;
       if (overrides && overrides.windowPrefixFormat.override) {
-        format = overrides.windowPrefixFormat.value;
+        useIfWindowName = wrapper.overrideFormatInfo.useIfWindowName;
+        prefix = overrides.windowPrefixFormat.value;
       }
 
-      let prefix = (format
-        .replace(formatPlaceholders.windowName.regExp, wrapper.windowName)
+      if (useIfWindowName) {
+        prefix = formatPlaceholders.ifWindowName.apply(prefix, (arg1, arg2) => wrapper.windowName ? arg1 : arg2);
+      }
 
-        .replace(formatPlaceholders.tabCount.regExp, wrapper.tabCount)
-        .replace(formatPlaceholders.totalTabCount.regExp, cachedTotalTabCount)
+      prefix = prefix.replace(formatPlaceholders.windowName.regExp, wrapper.windowName);
 
-
-        .replace(formatPlaceholders.firefoxVersion.regExp, browserInfo.version)
-        .replace(formatPlaceholders.firefoxBuildId.regExp, browserInfo.buildID)
-        
-        .replace(formatPlaceholders.platformOS.regExp, platformInfo.os)
-        .replace(formatPlaceholders.platformArchitecture.regExp, platformInfo.arch)
-      );
+      // Ensure unique prefix:
       if (formatPlaceholders.count.test(prefix)) {
         let initialPrefix = prefix;
         let count = 1;
@@ -999,8 +998,21 @@ class WindowWrapperCollection {
           prefix = initialPrefix.replace(formatPlaceholders.count.regExp, count++);
         } while (usedPrefixes.some(usedPrefix => usedPrefix === prefix));
       }
-
+      wrapper.cachedUsedPrefixForCountPlaceholder = prefix;
       usedPrefixes.push(prefix);
+
+      prefix = (prefix
+        .replace(formatPlaceholders.tabCount.regExp, wrapper.tabCount)
+        .replace(formatPlaceholders.totalTabCount.regExp, cachedTotalTabCount)
+
+
+        .replace(formatPlaceholders.firefoxVersion.regExp, browserInfo.version)
+        .replace(formatPlaceholders.firefoxBuildId.regExp, browserInfo.buildID)
+
+        .replace(formatPlaceholders.platformOS.regExp, platformInfo.os)
+        .replace(formatPlaceholders.platformArchitecture.regExp, platformInfo.arch)
+      );
+
       wrapper.setTitlePrefix(prefix);
     }
   }
@@ -1157,6 +1169,7 @@ class WindowWrapper {
     let getFormatInfo = () => {
       if (!cachedFormatInfo) {
         cachedFormatInfo = FormatPlaceholder.createFormatInfo(this.windowName);
+        cachedFormatInfo.useIfWindowName = false;
       }
       return cachedFormatInfo;
     };

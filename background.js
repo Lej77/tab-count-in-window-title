@@ -961,7 +961,7 @@ class WindowWrapperCollection {
     let updated = [];
     let usedPrefixes = allowed
       .filter((wrapper) => !windowWrappers.includes(wrapper))       // Only include wrappers that are not going to be updated.
-      .map(wrapper => wrapper.cachedUsedPrefixForCountPlaceholder || ''); // Get the last prefix format used for the %Count% placeholder.
+      .map(wrapper => (wrapper.lastTitlePrefix && wrapper.cachedUsedPrefixForCountPlaceholder) || ''); // Get the last prefix format used for the %Count% placeholder.
 
     for (let wrapper of this.array) {
       if (!windowWrappers.includes(wrapper)) {

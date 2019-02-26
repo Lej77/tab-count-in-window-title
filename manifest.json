@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Tab Count in Window Title",
-  "version": "4.7",
+  "version": "4.8",
   "default_locale": "en",
   "applications": {
     "gecko": {

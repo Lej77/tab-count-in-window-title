@@ -263,7 +263,7 @@ const defaultValues = Object.freeze({
       dontSetPrivateWindowTitles: true,                           // Don't set window prefixes in private windows.
 
       timeBetweenUpdatesInMilliseconds: 100,
-      windowPrefixFormat: '[%TabCount%] %WindowName% %IfWindowName(| ,)%',
+      windowPrefixFormat: '[%TabCount%] %IfWindowName(%WindowName% | ,)%',
 
       windowDefaultName: '',
       windowInheritName: false,

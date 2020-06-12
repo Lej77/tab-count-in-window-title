@@ -184,6 +184,9 @@
     "options_WindowData_Header": {
         "message": "Window Data"
     },
+    "options_WindowData_Permission": {
+        "message": "Note: the features in this section requires the \"sessions\" permission to function."
+    },
     "options_WindowData_DefaultWindowName": {
         "message": "Default window name (this name is set to opened windows):"
     },
@@ -235,6 +238,12 @@
     "options_OptionalPermissions_Tabs_Explanation": {
         "message": "The \"tabs\" permission is needed to access a tab's title or URL. \n\nThis is needed by the workaround for no title in new tab pages since it needs to know if the opened tab has the \"about:newtab\" URL."
     },
+    "options_OptionalPermissions_Sessions_Title": {
+        "message": "\"sessions\""
+    },
+    "options_OptionalPermissions_Sessions_Explanation": {
+        "message": "The \"sessions\" permission is needed to save window specific data such as window names."
+    },
     "options_Other_Header": {
         "message": "Other Settings"
     },
@@ -285,6 +294,9 @@
     },
     "popup_SettingsShortcutTooltip": {
         "message": "Settings"
+    },
+    "popup_PermissionWarning": {
+        "message": "The features in this popup requires the \"sessions\" permission to function. You can request this permission from the extensions option page which can be accessed easily via the button in the top right corner of the normal popup's page."
     },
     "optionalPermissions_BrowserActionPrompt": {
         "message": "You need to press on the extension's button in the browser's toolbar to request the permission. Press anywhere else in the settings page to cancel the request."

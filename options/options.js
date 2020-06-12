@@ -200,6 +200,16 @@ async function initiatePage() {
                 browser.runtime.sendMessage({ type: messageTypes.applyWindowName, name: (/** @type {HTMLInputElement} */ (document.getElementById('windowDefaultName'))).value });
             }
         });
+
+        const windowDataSection = collapsableInfo.sectionLookup.get(document.getElementById('windowDataArea'));
+        const checkPermission = async () => {
+            const hasPermissions = await browser.permissions.contains({ permissions: ['sessions'] });
+            toggleClass(windowDataSection.title, 'enablable', !hasPermissions);
+            toggleClass(windowDataSection.title, 'enabled', !hasPermissions);
+            toggleClass(windowDataSection.title, 'error', !hasPermissions);
+        };
+        onPermissionChange.addListener(() => checkPermission());
+        startListener(() => checkPermission());
     }
 
     // #endregion Window Data
@@ -261,6 +271,7 @@ async function initiatePage() {
         };
 
         createPermissionButtonArea({ permissions: ['tabs'] }, 'options_OptionalPermissions_Tabs_Title', 'options_OptionalPermissions_Tabs_Explanation');
+        createPermissionButtonArea({ permissions: ['sessions'] }, 'options_OptionalPermissions_Sessions_Title', 'options_OptionalPermissions_Sessions_Explanation');
     }
 
     // #endregion Optional Permissions

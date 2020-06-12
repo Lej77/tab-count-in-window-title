@@ -35,6 +35,22 @@ import {
 export const onWindowDataUpdate = new EventManager();
 export const onPermissionsChange = new EventManager();
 
+// Firefox 77 have permission events!
+try {
+  if (browser.permissions.onAdded) {
+    browser.permissions.onAdded.addListener((permissions) => {
+      onPermissionsChange.fire(permissions, true);
+    });
+  }
+  if (browser.permissions.onRemoved) {
+    browser.permissions.onRemoved.addListener((permissions) => {
+      onPermissionsChange.fire(permissions, false);
+    });
+  }
+} catch (error) {
+  console.error('Failed to listen to permission events.', error);
+}
+
 
 export let browserInfo = browser.runtime.getBrowserInfo();
 export let platformInfo = browser.runtime.getPlatformInfo();
@@ -163,6 +179,10 @@ startTabCounter();
 const portManager = new PortManager();
 onPermissionsChange.addListener(function () {
   portManager.fireEvent('permissionChanged', Array.from(arguments));
+
+  // Restart everything since "sessions" permission might cause a lot of changes to prefixes:
+  stopTabCounter();
+  startTabCounter();
 });
 
 

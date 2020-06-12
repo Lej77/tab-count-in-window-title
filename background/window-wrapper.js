@@ -248,7 +248,13 @@ export class WindowWrapperCollection {
                     } else {
                         const keyDataCombo = {};
                         keyDataCombo[windowDataKeys.isRestored] = value.trackRestore ? true : undefined;
-                        await WindowWrapperCollection.setWindowData(keyDataCombo);
+                        try {
+                            await WindowWrapperCollection.setWindowData(keyDataCombo);
+                        } catch (error) {
+                            if (browser.sessions) {
+                                console.error('Failed to update window session data (might be missing the "sessions" permission).', error);
+                            }
+                        }
                     }
                 }
             }
@@ -1298,7 +1304,15 @@ export class WindowWrapper {
             const defaultData = valueTest();
             let data = defaultData;
             let dataChanged = false;
-            browser.sessions.getWindowValue(window.id, dataKey).then(async (value) => {
+            (async () => {
+                let value = undefined;
+                try {
+                    if (browser.sessions) {
+                        value = await browser.sessions.getWindowValue(window.id, dataKey);
+                    }
+                } catch (error) {
+                    console.error('Failed to get session data for window.', error);
+                }
                 if (dataChanged) {
                     return;
                 }
@@ -1311,7 +1325,7 @@ export class WindowWrapper {
                 } else {
                     setData(value);
                 }
-            });
+            })();
             const getData = () => {
                 return deepCopy(data);
             };
@@ -1329,10 +1343,16 @@ export class WindowWrapper {
             };
             const updateData = async (value) => {
                 value = valueTest(value);
-                if (deepCopyCompare(value, defaultData)) {
-                    await browser.sessions.removeWindowValue(window.id, dataKey);
-                } else {
-                    await browser.sessions.setWindowValue(window.id, dataKey, value);
+                try {
+                    if (browser.sessions) {
+                        if (deepCopyCompare(value, defaultData)) {
+                            await browser.sessions.removeWindowValue(window.id, dataKey);
+                        } else {
+                            await browser.sessions.setWindowValue(window.id, dataKey, value);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to update session data for window.', error);
                 }
                 setData(value);
             };
@@ -1507,21 +1527,27 @@ export class WindowWrapper {
 
     async _handleRestoreData(tracking) {
         let isTracked = false;
+        if (!browser.sessions) return false;
         try {
-            if (tracking) {
-                isTracked = await browser.sessions.getWindowValue(this.window.id, windowDataKeys.isRestored);
-                return isTracked;
-            } else {
-                return false;
-            }
-        } finally {
-            if (tracking) {
-                if (!isTracked) {
-                    browser.sessions.setWindowValue(this.window.id, windowDataKeys.isRestored, true);
+            try {
+                if (tracking) {
+                    isTracked = await browser.sessions.getWindowValue(this.window.id, windowDataKeys.isRestored);
+                    return isTracked;
+                } else {
+                    return false;
                 }
-            } else {
-                browser.sessions.removeWindowValue(this.window.id, windowDataKeys.isRestored);
+            } finally {
+                if (tracking) {
+                    if (!isTracked) {
+                        browser.sessions.setWindowValue(this.window.id, windowDataKeys.isRestored, true);
+                    }
+                } else {
+                    browser.sessions.removeWindowValue(this.window.id, windowDataKeys.isRestored);
+                }
             }
+        } catch (error) {
+            console.error('Failed to get or update restored window session data.', error);
+            return false;
         }
     }
 

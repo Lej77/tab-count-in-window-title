@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Tab Count in Window Title",
-  "version": "5.0",
+  "version": "5.1",
   "default_locale": "en",
   "applications": {
     "gecko": {
@@ -13,11 +13,11 @@
     "page": "options/options.html"
   },
   "permissions": [
-    "storage",
-    "sessions"
+    "storage"
   ],
   "optional_permissions": [
-    "tabs"
+    "tabs",
+    "sessions"
   ],
   "background": {
     "page": "background/background.html"

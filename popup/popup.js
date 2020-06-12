@@ -136,6 +136,26 @@ async function initiatePage() {
   let sectionAnimation = new AnimationInfo({});
 
 
+  // #region Handle Permissions
+
+  let isAllowedPromise = browser.permissions.contains({ permissions: ['sessions'] });
+  const warnAboutPermissions = async () => {
+    const isAllowed = await isAllowedPromise;
+    if (isAllowed) return;
+    browser.permissions.request({ permissions: ['sessions'] }).then(granted => {
+      // This code is likely to not be reached since the popup will be closed when the user clicks on the permission prompt.
+      if (granted) {
+        browser.runtime.sendMessage({ type: messageTypes.permissionsChanged, permission: 'sessions', value: true });
+      }
+      // Prevent this code from running many times:
+      isAllowedPromise = true;
+    });
+    alert(browser.i18n.getMessage('popup_PermissionWarning'));
+  };
+
+  // #endregion Handle Permissions
+
+
   // #region Window Name
 
   let nameArea = document.createElement('div');
@@ -201,6 +221,7 @@ async function initiatePage() {
 
   new EventListener(windowName, 'input', (e) => {
     nameDataManager.value = windowName.value;
+    warnAboutPermissions();
   });
   new EventListener(windowName, 'keypress', (e) => {
     if (e.key === "Enter") {
@@ -440,6 +461,7 @@ async function initiatePage() {
 
       defaultNameInput.addEventListener('input', (e) => {
         defaultName.value = defaultNameInput.value;
+        warnAboutPermissions();
       });
       defaultName.onChange.addListener((value) => {
         defaultNameInput.value = value;

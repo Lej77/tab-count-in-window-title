@@ -1267,20 +1267,24 @@ export class WindowWrapper {
         this._lastTitlePrefix = '';
         this._forceTitleUpdate = false;
         this._titleUpdateManager = new RequestManager(
-            async (value, forceUpdate) => {
-                if (this._lastTitlePrefix === value && !this._forceTitleUpdate && !forceUpdate) {
+            async (value) => {
+                if (value && typeof value === 'function') {
+                    value = value();
+                }
+                if (this._lastTitlePrefix === value && !this._forceTitleUpdate) {
                     return;
                 }
                 this._forceTitleUpdate = false;
                 if (!value || value === '') {
-                    await this._clearPrefix();
+                    await WindowWrapper.clearWindowPrefixes(this.window.id);
+                    this._lastTitlePrefix = '';
                 } else {
-                    await WindowWrapper.setWindowPrefix(window.id, value);
+                    await WindowWrapper.setWindowPrefix(this.window.id, value);
                     this._lastTitlePrefix = value;
                 }
             },
             blockTime,
-            true
+            false,
         );
 
         // #endregion Title prefix
@@ -1516,7 +1520,7 @@ export class WindowWrapper {
         }
     }
 
-    // //#endregion Active Tab
+    // #endregion Active Tab
 
 
     // #region Window Data
@@ -1632,11 +1636,6 @@ export class WindowWrapper {
 
     // #region Title
 
-
-    async _clearPrefix() {
-        await WindowWrapper.clearWindowPrefixes(this.window.id);
-        this._lastTitlePrefix = '';
-    }
     async clearPrefix() {
         this._titleUpdateManager.forceUpdate('');
     }
@@ -1686,17 +1685,16 @@ export class WindowWrapper {
     }
 
     forceSetTitlePrefix(forceUpdateNow = true) {
-        let latestValue = this._titleUpdateManager.lastArgs;
-        if (latestValue.length > 0) {
-            latestValue = latestValue[0];
-        } else {
-            latestValue = this.lastTitlePrefix;
-        }
+        const getLatestPrefix = () => this.lastTitlePrefix;
+
+        // This will cause the next request to not check the cached prefix:
+        this._forceTitleUpdate = true;
+
         if (forceUpdateNow) {
-            this._titleUpdateManager.forceUpdate(latestValue, true);
+            // Start the next update request ASAP:
+            this._titleUpdateManager.forceUpdate(getLatestPrefix);
         } else {
-            this._forceTitleUpdate = true;
-            this._titleUpdateManager.invalidate(latestValue);
+            this._titleUpdateManager.invalidate(getLatestPrefix);
         }
     }
     unblockTitleUpdate() {
@@ -1731,7 +1729,7 @@ export class WindowWrapper {
 
     static async clearWindowPrefixes(windowIds = null) {
         if (!windowIds && windowIds !== 0) {
-            let windows = await browser.windows.getAll();
+            const windows = await browser.windows.getAll();
             windowIds = windows.map(window => window.id);
         }
         if (!Array.isArray(windowIds)) {

@@ -38,12 +38,35 @@ export const messageTypes = Object.freeze({
     applyWindowName: 'applyWindowName',
 });
 
+/**
+ * @typedef {Object} AdvancedFormatPlaceholderDefinition A more advanced definition of a format placeholder for placeholder that aren't just a string.
+ * @property {string} Info.start The pattern that starts this placeholder. Regex flags will be applied to this text so by default it isn't case sensitive.
+ * @property {any[]} Info.args An array of string that indicates what arguments this placeholder takes.
+ * @property {string} Info.end The pattern that ends this placeholder. Regex flags will be applied to this text so by default it isn't case sensitive.
+ */
 
+/**
+ * Info about a placeholder that is allowed when formatting a window's title preface.
+ *
+ * @template {string | AdvancedFormatPlaceholderDefinition} T
+ * @export
+ * @class FormatPlaceholder
+ */
 export class FormatPlaceholder {
+
+    /**
+     * Creates an instance of FormatPlaceholder.
+     *
+     * @param {T} format Info about this placeholder.
+     * @param {string} message The i18n message with a description about this placeholder.
+     * @param {Object} [Config] Extra options.
+     * @param {string} [Config.regExpFlags] Configure how the placeholder will be matched. By default it isn't case sensitive.
+     * @memberof FormatPlaceholder
+     */
     constructor(format, message, { regExpFlags = 'ig' } = {}) {
         const createRegExp = (string) => new RegExp(string.replace('(', '\\(').replace(')', '\\)'), regExpFlags);
         if (typeof format === 'object') {
-            const { start, args = [], end } = format;
+            const { start, args = [], end } = /** @type {AdvancedFormatPlaceholderDefinition} */ (format);
             const separators = args.filter((val, index) => index % 2 === 1);
 
             this.start = start;
@@ -57,12 +80,12 @@ export class FormatPlaceholder {
             this.end = end;
             this.endRegExp = createRegExp(end);
 
-            this.isFunction = true;
+            this.isFunctionLikePlaceholder = true;
             this.format = start + args.join('') + end;
         } else {
             this.format = format;
             this.regExp = createRegExp(this.format);
-            this.isFunction = false;
+            this.isFunctionLikePlaceholder = false;
         }
 
         this.message = message;
@@ -77,11 +100,12 @@ export class FormatPlaceholder {
         }
     }
 
+    // eslint-disable-next-line valid-jsdoc
     /**
      * Apply this placeholder to a string.
      *
      * @param {string} text The text to apply the placeholder to.
-     * @param {string|function} valueOrCallback Either the string to replace the placeholder with or a function that lazily determines the string. If a function is used it will also be passed string arguments if the placeholder requires that.
+     * @param { (function(): string) | (T extends string ? (string | function(): string) : ( null | ((...args: any[]) => string) ) ) } valueOrCallback Either the string to replace the placeholder with or a function that lazily determines the string. If a function is used it will also be passed string arguments if the placeholder requires that.
      * @returns {string} The text after the placeholder has been replaced.
      * @memberof FormatPlaceholder
      */
@@ -89,16 +113,16 @@ export class FormatPlaceholder {
         if (!text || typeof text !== 'string')
             return text;
         const isCallback = valueOrCallback && typeof valueOrCallback === 'function';
-        if (!this.isFunction) {
+        if (!this.isFunctionLikePlaceholder) {
             let value = valueOrCallback;
             if (isCallback) {
                 if (this.test(text)) {
-                    value = valueOrCallback();
+                    value = (/** @type {function(): any} */ (valueOrCallback))();
                 } else {
                     return text;
                 }
             }
-            return text.replace(this.regExp, value);
+            return text.replace(this.regExp, /** @type {string} */(value));
         } else {
             if (!isCallback)
                 return text;
@@ -123,7 +147,7 @@ export class FormatPlaceholder {
 
                 let args = [];
                 for (let iii = 0; iii < this.separators.length && iii < this.separatorsRegExp.length; iii++) {
-                    let value = requestText(this.separators[iii], this.separatorsRegExp[iii]);
+                    const value = requestText(this.separators[iii], this.separatorsRegExp[iii]);
                     if (value === null) {
                         args = null;
                         break;
@@ -134,7 +158,7 @@ export class FormatPlaceholder {
                 if (!args)
                     break;
 
-                let lastArg = requestText(this.end, this.endRegExp);
+                const lastArg = requestText(this.end, this.endRegExp);
                 if (lastArg === null)
                     break;
                 if (this.args.length > 0) {
@@ -142,7 +166,7 @@ export class FormatPlaceholder {
                 } else if (lastArg !== '')
                     break;
 
-                const replacement = valueOrCallback(...args);
+                const replacement = (/** @type {(...args: any[]) => string}*/ (valueOrCallback))(...args);
 
                 // Update return text:
                 processedText += beforePlaceholder + replacement;
@@ -166,6 +190,7 @@ export class FormatPlaceholder {
             if (this.regExp) {
                 return string.search(this.regExp) >= 0;
             } else {
+                // Function like placeholder
                 let found = false;
                 this.apply(string, () => {
                     found = true;
@@ -348,8 +373,8 @@ export const settings = settingsTracker.settings;
  * @returns {Promise<(ReturnType<typeof getDefaultSettings>[K])>} The value for the loaded setting.
  */
 export function quickLoadSetting(key) {
-  // @ts-ignore
-  return SettingsTracker.get(key, getDefaultSettings()[key]);
+    // @ts-ignore
+    return SettingsTracker.get(key, getDefaultSettings()[key]);
 }
 
 // #endregion Settings

@@ -40,6 +40,10 @@ import {
  * @typedef {import('../common/disposables.js').IDisposable} IDisposable
  */
 
+/**
+ * @typedef {import('../common/utilities.js').BrowserTab} BrowserTab
+ */
+
 
 // Allow sharing extension API event listeners to hopefully decrease overhead:
 const tabOnCreated = new PassthroughEventManager(browser.tabs.onCreated);
@@ -392,34 +396,40 @@ export class WindowWrapperCollection {
         ]);
         let timeDisposables = new DisposableCollection();
 
+        /**
+         * Wait a certain number of milliseconds. This delay can be canceled.
+         *
+         * @param {number} time The time in milliseconds to wait.
+         * @param {null | DisposableCollection} [disposableCollection] An optional extra collection to use. If this is disposed then the wait is canceled. The wait can still be canceled even if this isn't provided.
+         */
         const safeWait = async (time, disposableCollection) => {
             try {
                 if (time < 0) {
                     return;
                 }
-                let trackedWithArg = false;
+                let trackedWithArgCollection = false;
                 let timeout;
                 try {
-                    let promiseWrapper = new PromiseWrapper();
+                    const promiseWrapper = new PromiseWrapper();
 
                     timeout = new Timeout(() => promiseWrapper.resolve(), time);
-                    new EventListener(timeout.onStop, () => promiseWrapper.resolve());
+                    new EventListener(timeout.onDisposed, () => promiseWrapper.resolve());
                     if (!timeout.isActive) {
                         promiseWrapper.resolve();
                     }
                     timeDisposables.trackDisposables(timeout);
 
                     if (disposableCollection && disposableCollection instanceof DisposableCollection) {
-                        trackedWithArg = true;
+                        trackedWithArgCollection = true;
                         disposableCollection.trackDisposables(timeout);
                     }
 
                     await promiseWrapper.getValue();
                 } finally {
                     if (timeout) {
-                        timeout.stop();
+                        timeout.dispose();
                         timeDisposables.untrackDisposables(timeout);
-                        if (trackedWithArg) {
+                        if (trackedWithArgCollection) {
                             disposableCollection.untrackDisposables(timeout);
                         }
                     }
@@ -471,7 +481,7 @@ export class WindowWrapperCollection {
                         maxTime = new Promise((resolve, reject) => {
                             try {
                                 let timeout = new Timeout(resolve, timeoutTime);
-                                timeout.onStop.addListener(() => resolve());
+                                timeout.onDisposed.addListener(() => resolve());
                                 collection.trackDisposables(timeout);
                             } catch (error) {
                                 reject(error);
@@ -496,11 +506,17 @@ export class WindowWrapperCollection {
 
             let isTrackingHandled = false;
             let handleTabIds = [];
-            let newTabURLs = [
+            const newTabURLs = [
                 'about:newtab',
                 'about:home',
             ];
-            let handleNewPage = async (tab, justCreated = false) => {
+            /**
+             * Ensure the new tab page is fixed so that the title preface is shown.
+             *
+             * @param {BrowserTab} tab A browser tab.
+             * @param {boolean} [justCreated] `true` if the tab was created right this moment.
+             */
+            const handleNewPage = async (tab, justCreated = false) => {
                 // Some new tab pages has a title and some don't:
                 // # New tab pages opened in private windows always have titles and they are always shown.
                 // # New tab pages opened in new tabs needs to be reloaded to have a title and then the window title needs to be updated for it to be shown. The tab doesn't need to be reloaded if the tab was opened in a new window.
@@ -530,7 +546,7 @@ export class WindowWrapperCollection {
                         if (waitAttempt > 4) {
                             return;
                         }
-                        if (waitAttempt + 1 > 4) {
+                        if ((waitAttempt + 1) > 4) {
                             await safeWait(getNewTabFix_LoadWaitTime() - (Date.now() - createTime));
                         } else {
                             await delay(50);
@@ -803,6 +819,7 @@ export class WindowWrapperCollection {
 
                     const winDataSettings = getWindowDataSettings();
                     initialWindowData[windowDataKeys.name] = winDataSettings.defaultName;
+                    /** @type {WindowWrapper} */
                     let lastWrapper;
                     if (winDataSettings.inheritName || winDataSettings.inheritSettings) {
                         lastWrapper = this.getWindowWrappersById(getLastFocusedWindow(window.id));
@@ -853,9 +870,16 @@ export class WindowWrapperCollection {
 
 
         let windowFocusedListeners = null;
+        /** @type {number[]} Ids of the windows that have had focus. */
         let lastFocused = [];
         let focusCacheLength = 5;
         let focusedIndex = 0;
+        /**
+         * Get the window id of the latest focused window.
+         *
+         * @param {number | number[]} [ignoredWindowIds=[]] Window ids to ignore. Will get the window that had focus before these ones.
+         * @returns {null | number} The id of the window that had focus.
+         */
         const getLastFocusedWindow = (ignoredWindowIds = []) => {
             if (!Array.isArray(ignoredWindowIds)) {
                 ignoredWindowIds = [ignoredWindowIds];
@@ -876,7 +900,7 @@ export class WindowWrapperCollection {
                     return windowId;
                 }
                 index--;
-                if (index === lastFocused) {
+                if (index === focusedIndex) {
                     return null;
                 }
             }
@@ -1034,17 +1058,26 @@ export class WindowWrapperCollection {
         startNeededListeners();
     }
 
+    // eslint-disable-next-line valid-jsdoc
+    /**
+     * Get the `WindowWrapper` for a certain window id.
+     *
+     * @template {number | number[]} I
+     * @param {I} windowIds A window id or an array of window ids.
+     * @returns { I extends number[] ? WindowWrapper[] : WindowWrapper } If `windowIds` was an array then an array of window wrappers; otherwise the window wrapper for the specified id.
+     * @memberof WindowWrapperCollection
+     */
     getWindowWrappersById(windowIds) {
         if (!windowIds && windowIds !== 0) {
             return;
         }
         let oneValue = false;
         if (!Array.isArray(windowIds)) {
-            windowIds = [windowIds];
+            windowIds = /** @type {any} */ ([windowIds]);
             oneValue = true;
         }
         const wrappers = [];
-        for (const windowId of windowIds) {
+        for (const windowId of /** @type {number[]} */ (windowIds)) {
             const possible = this.array.filter(wrapper => wrapper.window.id === windowId);
             if (possible.length === 0) {
                 wrappers.push(null);
@@ -1053,8 +1086,10 @@ export class WindowWrapperCollection {
             }
         }
         if (oneValue) {
+            // @ts-ignore
             return wrappers[0];
         } else {
+            // @ts-ignore
             return wrappers;
         }
     }
@@ -1076,7 +1111,7 @@ export class WindowWrapperCollection {
         const cachedFormat = this.titleFormat;
         let cachedTotalTabCount = '';
         if (this.formatInfo.useTotalTabCount) {
-            cachedTotalTabCount = WindowWrapperCollection.calculateTotalTabCount(this.windowFilter(this, filterType.tabCount));
+            cachedTotalTabCount = String(WindowWrapperCollection.calculateTotalTabCount(this.windowFilter(this, filterType.tabCount)));
         }
 
         const allowed = this.windowFilter(this, filterType.title);
@@ -1167,7 +1202,7 @@ export class WindowWrapperCollection {
 
     static calculateTotalTabCount(windowWrappers) {
         let tabCount = 0;
-        for (let windowWrapper of windowWrappers) {
+        for (const windowWrapper of windowWrappers) {
             tabCount += windowWrapper.tabCount;
         }
         return tabCount;

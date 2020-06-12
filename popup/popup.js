@@ -290,6 +290,7 @@ async function initiatePage() {
     let placeholderSections = [
       {
         area: platformSection.content,
+        /** @type {FormatPlaceholder[]} */
         placeholders: [
           formatPlaceholders.platformOS,
           formatPlaceholders.platformArchitecture,
@@ -312,7 +313,7 @@ async function initiatePage() {
       area.innerHTML = placeholder.messageText;
 
       let placed = false;
-      for (let placeholderSection of placeholderSections) {
+      for (const placeholderSection of placeholderSections) {
         if (!placeholderSection.placeholders.includes(placeholder)) {
           continue;
         }

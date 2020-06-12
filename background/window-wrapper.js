@@ -1265,12 +1265,12 @@ export class WindowWrapper {
         // #region Title prefix
 
         this._lastTitlePrefix = '';
+        /** Indicates that the next update of the window's prefix should ignore the cached value. */
         this._forceTitleUpdate = false;
+        this._wantedTitlePrefix = '';
         this._titleUpdateManager = new RequestManager(
-            async (value) => {
-                if (value && typeof value === 'function') {
-                    value = value();
-                }
+            async () => {
+                const value = this._wantedTitlePrefix;
                 if (this._lastTitlePrefix === value && !this._forceTitleUpdate) {
                     return;
                 }
@@ -1637,7 +1637,8 @@ export class WindowWrapper {
     // #region Title
 
     async clearPrefix() {
-        this._titleUpdateManager.forceUpdate('');
+        this._wantedTitlePrefix = '';
+        this._titleUpdateManager.forceUpdate();
     }
 
     get lastTitlePrefix() {
@@ -1647,6 +1648,12 @@ export class WindowWrapper {
         this._lastTitlePrefix = value;
     }
 
+    /**
+     * Figure out the current title preface for this window. This can be used to determine the title preface that was set by another extension.
+     *
+     * @returns {Promise<null | string>} The title preface for this window.
+     * @memberof WindowWrapper
+     */
     async getTitlePrefix() {
         if (!this.window) {
             // No window.
@@ -1681,20 +1688,19 @@ export class WindowWrapper {
         return title;
     }
     async setTitlePrefix(value) {
-        this._titleUpdateManager.invalidate(value);
+        this._wantedTitlePrefix = value || '';
+        this._titleUpdateManager.invalidate();
     }
 
     forceSetTitlePrefix(forceUpdateNow = true) {
-        const getLatestPrefix = () => this.lastTitlePrefix;
-
         // This will cause the next request to not check the cached prefix:
         this._forceTitleUpdate = true;
 
         if (forceUpdateNow) {
             // Start the next update request ASAP:
-            this._titleUpdateManager.forceUpdate(getLatestPrefix);
+            this._titleUpdateManager.forceUpdate();
         } else {
-            this._titleUpdateManager.invalidate(getLatestPrefix);
+            this._titleUpdateManager.invalidate();
         }
     }
     unblockTitleUpdate() {

@@ -236,13 +236,25 @@
         "message": "\"tabs\""
     },
     "options_OptionalPermissions_Tabs_Explanation": {
-        "message": "The \"tabs\" permission is needed to access a tab's title or URL. \n\nThis is needed by the workaround for no title in new tab pages since it needs to know if the opened tab has the \"about:newtab\" URL."
+        "message": "The \"tabs\" permission is needed to access a tab's title or URL.\n\nThis is needed by the workaround for no title in new tab pages since it needs to know if the opened tab has the \"about:newtab\" URL."
     },
     "options_OptionalPermissions_Sessions_Title": {
         "message": "\"sessions\""
     },
     "options_OptionalPermissions_Sessions_Explanation": {
-        "message": "The \"sessions\" permission is needed to save window specific data such as window names."
+        "message": "The \"sessions\" permission is needed to save window specific data such as window names.\n\nThe \"sessions\" permission is only available as an optional permission in Firefox 77 and later. If you want to use functionality that depends on this permission in an earlier Firefox version then you need to download an earlier version of this extension."
+    },
+    "options_OptionalPermissions_Sessions_LegacyWarning": {
+        "message": "The \"sessions\" permission is only available as an optional permission in Firefox 77 and later. If you want to use functionality that depends on this permission in an earlier Firefox version then you need to download an earlier version of this extension.\n\nClick anywhere to dismiss this message."
+    },
+    "options_OptionalPermissions_Sessions_PermissionAvailable": {
+        "message": "Permission available in this Firefox version:"
+    },
+    "options_OptionalPermissions_Sessions_PermissionAvailable_True": {
+        "message": "True"
+    },
+    "options_OptionalPermissions_Sessions_PermissionAvailable_False": {
+        "message": "False"
     },
     "options_Other_Header": {
         "message": "Other Settings"

@@ -55,6 +55,7 @@ import {
 
 import {
     delay,
+    PromiseWrapper,
 } from '../common/delays.js';
 
 import {
@@ -263,15 +264,68 @@ async function initiatePage() {
             browserActionPromptMessage: 'optionalPermissions_BrowserActionPrompt',
         };
 
-        const createPermissionButtonArea = function (permission, titleMessage, explanationMessage) {
-            const obj = createOptionalPermissionArea(Object.assign({}, areaDetails, { permission, titleMessage, explanationMessage }));
+        // eslint-disable-next-line valid-jsdoc
+        /**
+         * Create an area for a specific optional permission.
+         *
+         * @param { Partial<Pick<Parameters<typeof createOptionalPermissionArea>[0], keyof (typeof areaDetails)>> & Omit<Parameters<typeof createOptionalPermissionArea>[0], keyof (typeof areaDetails)> } details Details for the area that should be created.
+         * @returns {ReturnType<typeof createOptionalPermissionArea>} Info about the created area.
+         */
+        const createPermissionButtonArea = function (details) {
+            const obj = createOptionalPermissionArea(Object.assign({}, areaDetails, details));
             permissionControllers.push(obj);
             optionalPermissionsArea.appendChild(obj.area);
             return obj;
         };
 
-        createPermissionButtonArea({ permissions: ['tabs'] }, 'options_OptionalPermissions_Tabs_Title', 'options_OptionalPermissions_Tabs_Explanation');
-        createPermissionButtonArea({ permissions: ['sessions'] }, 'options_OptionalPermissions_Sessions_Title', 'options_OptionalPermissions_Sessions_Explanation');
+        createPermissionButtonArea({
+            permission: { permissions: ['tabs'] },
+            titleMessage: 'options_OptionalPermissions_Tabs_Title',
+            explanationMessage: 'options_OptionalPermissions_Tabs_Explanation',
+        });
+
+        let requestOp = new PromiseWrapper();
+        const sessionPermissionArea = createPermissionButtonArea({
+            permission: { permissions: ['sessions'] },
+            titleMessage: 'options_OptionalPermissions_Sessions_Title',
+            explanationMessage: 'options_OptionalPermissions_Sessions_Explanation',
+            browserActionPromptMessage: 'options_OptionalPermissions_Sessions_LegacyWarning',
+            requestViaBrowserActionCallback: (permission) => {
+                if (permission) {
+                    return requestOp.getValue();
+                } else {
+                    requestOp.resolve();
+                    requestOp = new PromiseWrapper();
+                }
+            },
+        });
+        {
+            const permissionAvailableStatusIndicator = createStatusIndicator({
+                headerMessage: 'options_OptionalPermissions_Sessions_PermissionAvailable',
+                enabledMessage: 'options_OptionalPermissions_Sessions_PermissionAvailable_True',
+                disabledMessage: 'options_OptionalPermissions_Sessions_PermissionAvailable_False',
+            });
+            sessionPermissionArea.section.content.appendChild(document.createElement('br'));
+            sessionPermissionArea.section.content.appendChild(permissionAvailableStatusIndicator.area);
+            (async () => {
+                let isAvailable = false;
+                try {
+                    const browserInfo = await browser.runtime.getBrowserInfo();
+                    const [majorVersion,] = (await browserInfo).version.split('.');
+                    if (majorVersion >= 77) {
+                        isAvailable = true;
+                    }
+                } catch (error) {
+                    console.error('Failed to determine if "sessions" permission is available', error);
+                }
+                if (isAvailable) {
+                    permissionAvailableStatusIndicator.isEnabled = true;
+                } else {
+                    permissionAvailableStatusIndicator.isEnabled = false;
+                    sessionPermissionArea.hasError = true;
+                }
+            })();
+        }
     }
 
     // #endregion Optional Permissions

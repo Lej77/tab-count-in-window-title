@@ -63,7 +63,8 @@ quickLoadSetting('popupPage_disableDarkTheme')
   })
   .catch(error => console.error('Failed to disable popup dark theme support.', error));
 
-browser.runtime.getBrowserInfo()
+const browserInfo = browser.runtime.getBrowserInfo();
+browserInfo
   .then(browserInfo => {
     const [majorVersion,] = browserInfo.version.split('.');
     if (majorVersion < 65) {
@@ -140,16 +141,19 @@ async function initiatePage() {
 
   let isAllowedPromise = browser.permissions.contains({ permissions: ['sessions'] });
   const warnAboutPermissions = async () => {
-    const isAllowed = await isAllowedPromise;
-    if (isAllowed) return;
-    browser.permissions.request({ permissions: ['sessions'] }).then(granted => {
-      // This code is likely to not be reached since the popup will be closed when the user clicks on the permission prompt.
-      if (granted) {
-        browser.runtime.sendMessage({ type: messageTypes.permissionsChanged, permission: 'sessions', value: true });
-      }
-      // Prevent this code from running many times:
-      isAllowedPromise = true;
-    });
+    const [majorVersion,] = (await browserInfo).version.split('.');
+    if (majorVersion >= 77) {
+      const isAllowed = await isAllowedPromise;
+      if (isAllowed) return;
+      browser.permissions.request({ permissions: ['sessions'] }).then(granted => {
+        // This code is likely to not be reached since the popup will be closed when the user clicks on the permission prompt.
+        if (granted) {
+          browser.runtime.sendMessage({ type: messageTypes.permissionsChanged, permission: 'sessions', value: true });
+        }
+        // Prevent this code from running many times:
+        isAllowedPromise = true;
+      });
+    }
     alert(browser.i18n.getMessage('popup_PermissionWarning'));
   };
 
@@ -401,6 +405,7 @@ async function initiatePage() {
       area.appendChild(overrideObj.area);
 
       overrideObj.checkbox.addEventListener('input', (e) => {
+        warnAboutPermissions();
         change();
         checkIfAnyOverrideSetting();
       });

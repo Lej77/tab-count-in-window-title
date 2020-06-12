@@ -78,6 +78,7 @@ export function createOptionalPermissionArea({
 }) {
   const obj = {};
   let hasPermission = false;
+  let hasError = false;
 
   /** @type {EventManager<[boolean]>} */
   const onClick = new EventManager();
@@ -133,17 +134,26 @@ export function createOptionalPermissionArea({
   explanation.classList.add('textSelectable');
   section.content.appendChild(explanation);
 
+  const updateUI = () => {
+    toggleClass(section.area, 'granted', hasPermission);
+    toggleClass(section.title, 'enabled', hasPermission || hasError);
+    toggleClass(section.title, 'error', hasError);
+  };
 
   const permissionChanged = (modifiedPermission = false) => {
-    toggleClass(section.area, 'granted', hasPermission);
-    toggleClass(section.title, 'enabled', hasPermission);
     permissionIndicator.isEnabled = hasPermission;
+    updateUI();
 
     onHasPermissionChanged.fire(obj, modifiedPermission);
   };
 
   const start = async () => {
-    hasPermission = await browser.permissions.contains(permission);
+    try {
+      hasPermission = await browser.permissions.contains(permission);
+    } catch (error) {
+      console.error('Failed to check status of permission: ', permission, '\nError: ', error);
+      obj.hasError = true;
+    }
     permissionChanged();
 
     const handleButtonClick = async (e) => {
@@ -170,7 +180,7 @@ export function createOptionalPermissionArea({
             attemptWithBrowserAction = true;
           }
         }
-        if (attemptWithBrowserAction && requestViaBrowserActionCallback && typeof requestViaBrowserActionCallback === 'function') {
+        if (wantedState && attemptWithBrowserAction && requestViaBrowserActionCallback && typeof requestViaBrowserActionCallback === 'function') {
           const operation = requestViaBrowserActionCallback(permission);
           if (browserActionPromptMessage && operation) {
             // This operation can be canceled!
@@ -209,8 +219,14 @@ export function createOptionalPermissionArea({
     removeButton.addEventListener('click', handleButtonClick);
   };
 
-  var checkPermission = async (modifiedPermission = false) => {
-    const newHasPermission = await browser.permissions.contains(permission);
+  const checkPermission = async (modifiedPermission = false) => {
+    let newHasPermission = false;
+    try {
+      newHasPermission = await browser.permissions.contains(permission);
+    } catch (error) {
+      console.error('Failed to check status of permission: ', permission, '\nError: ', error);
+      obj.hasError = true;
+    }
     if (newHasPermission === hasPermission) {
       return false;
     }
@@ -241,6 +257,12 @@ export function createOptionalPermissionArea({
   obj.permission = permission;
 
   defineProperty(obj, 'hasPermission', () => hasPermission);
+  defineProperty(obj, 'hasError', () => hasError, (value) => {
+    value = Boolean(value);
+    if (value === hasError) return;
+    hasError = value;
+    updateUI();
+  });
 
   /** Wait for UI to check the current status of the permission. */
   obj.start = start();

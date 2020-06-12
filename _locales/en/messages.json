@@ -23,6 +23,9 @@
     "options_Milliseconds": {
         "message": " milliseconds."
     },
+    "options_Pixels": {
+        "message": " pixels."
+    },
     "options_AllowInPrivateWindows": {
         "message": "Don't count tabs that are in private windows."
     },
@@ -69,11 +72,42 @@
             }
         }
     },
+    "options_FormatPlaceholders_ActiveTabIndex": {
+        "message": "$placeholder$: The index of the selected tab in the current window. This index starts at 1.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
     "options_FormatPlaceholders_IfWindowName": {
         "message": "$placeholder$: where <b>$False$</b> and <b>$True$</b> can be any text. This placeholder will be replace with the <b>$False$</b> text if the window name is empty and the <b>$True$</b> text if the window name isn't empty.",
         "placeholders": {
             "placeholder": {
                 "content": "$1"
+            },
+            "true": {
+                "content": "True"
+            },
+            "false": {
+                "content": "False"
+            }
+        }
+    },
+    "options_FormatPlaceholders_IfRegexMatch": {
+        "message": "$placeholder$: where <b>$textToSearch$</b>, <b>$false$</b> and <b>$true$</b> can be any text. The <b>$regex$</b> text should be a valid regex definition and <b>$regexFlags$</b> should be some valid regex flags. This placeholder will be replace with the <b>$True$</b> text if the <b>$regex$</b> text matches the <b>$textToSearch$</b> and the <b>$False$</b> text if it doesn't match.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            },
+            "textToSearch": {
+                "content": "TextToMatchAgainst"
+            },
+            "regex": {
+                "content": "Regex"
+            },
+            "regexFlags": {
+                "content": "RegexFlags"
             },
             "true": {
                 "content": "True"
@@ -125,6 +159,22 @@
     },
     "options_FormatPlaceholders_Architecture": {
         "message": "$placeholder$: The platform's processor architecture.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
+    "options_FormatPlaceholders_Percent": {
+        "message": "$placeholder$: A <b>\"%\"</b> character. Provides a way to write escaped percent signs which can be useful to write text that would otherwise be interpreted as a placeholder.",
+        "placeholders": {
+            "placeholder": {
+                "content": "$1"
+            }
+        }
+    },
+    "options_FormatPlaceholders_Comma": {
+        "message": "$placeholder$: A <b>\",\"</b> character. Provides a way to write escaped commas which can be useful for the placeholders that take arguments.",
         "placeholders": {
             "placeholder": {
                 "content": "$1"
@@ -185,11 +235,29 @@
     "options_OptionalPermissions_Tabs_Explanation": {
         "message": "The \"tabs\" permission is needed to access a tab's title or URL. \n\nThis is needed by the workaround for no title in new tab pages since it needs to know if the opened tab has the \"about:newtab\" URL."
     },
+    "options_Other_Header": {
+        "message": "Other Settings"
+    },
+    "options_SettingsPageStyleLegend": {
+        "message": "Option page style"
+    },
+    "options_PopupPageStyleLegend": {
+        "message": "Browser action popup style"
+    },
     "options_Animations_OptionsPage": {
         "message": "Disable animations on options page."
     },
     "options_Animations_PopupPage": {
         "message": "Disable animations on popup page."
+    },
+    "options_optionsPage_disableDarkTheme": {
+        "message": "Disable dark theme support on options page."
+    },
+    "options_popupPage_disableDarkTheme": {
+        "message": "Disable dark theme support on popup page."
+    },
+    "options_popupPage_width": {
+        "message": "The width of the browser action popup (-1 to use the default width):"
     },
     "options_resetSettings": {
         "message": "Reset Settings"

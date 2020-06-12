@@ -1,3 +1,77 @@
+'use strict';
+
+import {
+  messagePrefix,
+  setTextMessages,
+  setMessagePrefix,
+  toggleClass,
+} from '../ui/utilities.js';
+
+import {
+  createCollapsableArea,
+  AnimationInfo,
+} from '../ui/collapsable.js';
+
+import {
+  createCheckBox,
+} from '../ui/basic-components.js';
+
+import {
+  settings,
+  settingsTracker,
+  formatPlaceholders,
+  FormatPlaceholder,
+  messageTypes,
+  windowDataKeys,
+  debug,
+  quickLoadSetting,
+} from '../common/common.js';
+
+import {
+  delay,
+  RequestManager,
+} from '../common/delays.js';
+
+import {
+  deepCopyCompare,
+  deepCopy,
+  defineProperty,
+} from '../common/utilities.js';
+
+import {
+  EventListener,
+  EventManager,
+} from '../common/events.js';
+
+
+setMessagePrefix('message_');
+
+
+// Load settings related to styling immediately:
+
+quickLoadSetting('popupPage_width')
+  .then(popupPage_width => {
+    if (popupPage_width >= 0)
+      document.body.style.width = popupPage_width + 'px';
+  })
+  .catch(error => console.error('Failed to apply popup width setting.', error));
+quickLoadSetting('popupPage_disableDarkTheme')
+  .then(disableDarkTheme => {
+    if (disableDarkTheme) {
+      document.documentElement.classList.remove('support-dark-theme');
+    }
+  })
+  .catch(error => console.error('Failed to disable popup dark theme support.', error));
+
+browser.runtime.getBrowserInfo()
+  .then(browserInfo => {
+    const [majorVersion,] = browserInfo.version.split('.');
+    if (majorVersion < 65) {
+      document.documentElement.classList.add('legacy-force-word-wrap');
+    }
+  })
+  .catch(error => console.error('Failed to load browser info to fix styling.', error));
+
 
 class WindowSessionDataManager {
   constructor(window, dataKey, loadedCallback, valueTest) {
@@ -57,14 +131,9 @@ class WindowSessionDataManager {
   }
 }
 
-
-
 async function initiatePage() {
-  let settingsTracker = new SettingsTracker();
-  let settings = settingsTracker.settings;
-
   let currentWindow = browser.windows.getCurrent();
-  let sectionAnimation = {};
+  let sectionAnimation = new AnimationInfo({});
 
 
   // #region Window Name
@@ -86,7 +155,7 @@ async function initiatePage() {
 
   let optionsShortcut = document.createElement('div');
   optionsShortcut.classList.add('optionsShortcut');
-  optionsShortcut.setAttribute('tabindex', 0);
+  optionsShortcut.setAttribute('tabindex', String(0));
   optionsShortcut.setAttribute('role', 'button');
   optionsShortcut.setAttribute('title', browser.i18n.getMessage('popup_SettingsShortcutTooltip'));
   nameHeaderArea.appendChild(optionsShortcut);
@@ -384,7 +453,7 @@ async function initiatePage() {
 
   // #region Session Restore Tracking
 
-  if (debug.popop_sessionRestoreTracking) {
+  if (debug.popup_sessionRestoreTracking) {
     let restoreTracked = createCheckBox();
     restoreTracked.label.textContent = 'Tracked';
 
@@ -398,7 +467,7 @@ async function initiatePage() {
   // #endregion Session Restore Tracking
 
 
-  setTextMessages();
+  setTextMessages(null, { asHTML: true, });
   await settingsTracker.start;
   let checkAnimations = () => {
     if (settings.disablePopupPageAnimations) {
@@ -410,6 +479,12 @@ async function initiatePage() {
   settingsTracker.onChange.addListener((changes) => {
     if (changes.disablePopupPageAnimations) {
       checkAnimations();
+    }
+    if (changes.popupPage_width) {
+      document.body.style.width = settings.popupPage_width >= 0 ? settings.popupPage_width + 'px' : '';
+    }
+    if (changes.popupPage_disableDarkTheme) {
+      toggleClass(document.documentElement, 'support-dark-theme', !settings.popupPage_disableDarkTheme);
     }
   });
   checkAnimations();

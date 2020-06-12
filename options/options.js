@@ -1,48 +1,132 @@
+'use strict';
+
+import {
+    bindElementIdsToSettings,
+} from '../ui/bind-settings.js';
+
+import {
+    setTextMessages,
+    setMessagePrefix,
+    toggleClass,
+} from '../ui/utilities.js';
+
+import {
+    AnimationInfo,
+    bindCollapsableAreas,
+} from '../ui/collapsable.js';
+
+import {
+    setRequiresPrefix,
+    bindDependantSettings,
+} from '../ui/requires.js';
+
+import {
+    createShortcutsArea,
+} from '../ui/shortcuts.js';
+
+import {
+    createOptionalPermissionArea
+} from '../ui/permissions.js';
+
+import {
+    settings,
+    settingsTracker,
+    FormatPlaceholder,
+    messageTypes,
+    quickLoadSetting,
+} from '../common/common.js';
+
+import {
+    EventListener,
+    EventManager,
+} from '../common/events.js';
+
+import {
+    SettingsTracker,
+} from '../common/settings.js';
+
+import {
+    PortConnection,
+} from '../common/connections.js';
+
+import {
+    DisposableCreators,
+} from '../common/disposables.js';
+
+import {
+    delay,
+} from '../common/delays.js';
+
+import {
+    createStatusIndicator,
+} from '../ui/status-indicator.js';
+
+
+setMessagePrefix('message_');
+setRequiresPrefix('requires_');
+
+
+quickLoadSetting('optionsPage_disableDarkTheme')
+    .then(disableDarkTheme => {
+        if (disableDarkTheme) {
+            document.documentElement.classList.remove('support-dark-theme');
+        }
+    })
+    .catch(error => console.error('Failed to disable dark theme support on options page.', error));
+
 
 async function initiatePage() {
-    let settingsTracker = new SettingsTracker();
-    let settings = settingsTracker.settings;
+    const pagePort = new PortConnection();
+    const sectionAnimation = new AnimationInfo({ standard: false }); // No animation before load to expand initial sections immediately.
 
-    var pagePort = new PortConnection();
-    var sectionAnimation = { standard: false }; // No animation before load to expand initial sections immediately.
+    const onPermissionChange = new EventManager();
+    const permissionControllers = [];
 
     // #region Delayed Listener Startup
 
-    var eventStarters = new DisposableCreators();
-    var startListener = (callback) => eventStarters.createDisposable(callback);
-    var startAllListeners = () => {
+    const eventStarters = new DisposableCreators();
+    const startListener = (callback) => eventStarters.createDisposable(callback);
+    const startAllListeners = () => {
         eventStarters.stop();
         eventStarters.start();
     };
-    startListener(() => bindElementIdsToSettings(settings));
 
     // #endregion Delayed Listener Startup
 
 
-    // #region Window Title
+    // #region Collapsable sections
 
-    {
-        let winTitleSection = createCollapsableArea(sectionAnimation);
-        winTitleSection.isCollapsed = false;
-        winTitleSection.area.classList.add('standardFormat');
-        winTitleSection.title.classList.add('center');
-        document.body.appendChild(winTitleSection.area);
+    const collapsableInfo = bindCollapsableAreas({
+        animationInfo: sectionAnimation,
+        enabledCheck: [
+            {
+                element: document.getElementById('fixNoTabForNewTabPagesArea'),
+                check: async (setToError) => {
+                    const hasPermissions = await browser.permissions.contains({ permissions: ['tabs'] });
+                    if (!hasPermissions) setToError();
+                    return settings.newTabNoTitleWorkaround_Enabled;
+                }
+            },
+            {
+                element: document.getElementById('permissionsArea'),
+                check: () => {
+                    const hasAnyPermission = permissionControllers.filter(controller => controller.hasPermission).length > 0;
+                    return hasAnyPermission;
+                },
+            }
+        ],
+    });
+    onPermissionChange.addListener(() => collapsableInfo.checkAll());
 
-        let header = document.createElement('div');
-        header.classList.add(messagePrefix + 'options_GeneralSection_Header');
-        winTitleSection.title.appendChild(header);
+    // #endregion Collapsable sections
 
-        winTitleSection.content.appendChild(document.getElementById('generalSettingsArea'));
-    }
-
-    // #endregion Window Title
 
     // #region Format Placeholders
 
     {
-        let formatPlaceholderArea = document.getElementById('formatPlaceholders');
-        for (let placeholder of FormatPlaceholder.all) {
-            let area = document.createElement('div');
+        const formatPlaceholderArea = document.getElementById('formatPlaceholders');
+        for (const placeholder of FormatPlaceholder.all) {
+            const area = document.createElement('div');
             area.innerHTML = placeholder.messageText;
             formatPlaceholderArea.appendChild(area);
         }
@@ -54,42 +138,47 @@ async function initiatePage() {
     // #region Stop & Start Button
 
     {
-        let _isUpdating = false;
-        let manager = {
-            get isUpdating() {
-                return Boolean(_isUpdating);
-            },
-            set isUpdating(value) {
-                value = Boolean(value);
-                let oldValue = _isUpdating;
-                _isUpdating = value;
-
-                if (value) {
-                    document.documentElement.classList.add("updating");
-                    if (oldValue) {
-                        browser.runtime.sendMessage({ type: messageTypes.updatePrefix });
-                    }
-                } else {
-                    document.documentElement.classList.remove("updating");
-                    browser.runtime.sendMessage({ type: messageTypes.clearPrefix });
+        const status = createStatusIndicator({
+            headerMessage: 'options_UpdateStatus',
+            enabledMessage: 'options_UpdatesOn',
+            disabledMessage: 'options_UpdatesOff',
+        });
+        document.getElementById('updateStatusArea').appendChild(status.area);
+        startListener(() => {
+            status.isEnabled = settings.isEnabled;
+            return new EventListener(settingsTracker.onChange, (changes) => {
+                if (changes.isEnabled) {
+                    status.isEnabled = settings.isEnabled;
                 }
+            });
+        });
 
-                Settings.set("isEnabled", value);
-            },
+
+        const setIsUpdating = (value) => {
+            value = Boolean(value);
+
+            if (!value) {
+                // Clear all prefixes when clicking the disable button:
+                browser.runtime.sendMessage({ type: messageTypes.clearPrefix });
+            } else if (settings.isEnabled) {
+                // Already enabled, try to set prefixes again!
+                browser.runtime.sendMessage({ type: messageTypes.updatePrefix });
+            }
+
+            SettingsTracker.set("isEnabled", value);
         };
 
         startListener(() => {
             if (settings.isEnabled) {
-                manager.isUpdating = true;
+                setIsUpdating(true);
             }
         });
 
-
         document.getElementById("stopUpdates").addEventListener("click", e => {
-            manager.isUpdating = false;
+            setIsUpdating(false);
         });
         document.getElementById("startUpdates").addEventListener("click", e => {
-            manager.isUpdating = true;
+            setIsUpdating(true);
         });
     }
 
@@ -99,28 +188,16 @@ async function initiatePage() {
     // #region Window Data
 
     {
-        let winDataSection = createCollapsableArea(sectionAnimation);
-        winDataSection.isCollapsed = false;
-        winDataSection.area.classList.add('standardFormat');
-        winDataSection.title.classList.add('center');
-        document.body.appendChild(winDataSection.area);
-
-        let header = document.createElement('div');
-        header.classList.add(messagePrefix + 'options_WindowData_Header');
-        winDataSection.title.appendChild(header);
-
-        winDataSection.content.appendChild(document.getElementById('windowDataArea'));
-
         document.getElementById('clearWindowDataButton').addEventListener('click', () => {
-            let ok = confirm(browser.i18n.getMessage('options_WindowData_ClearData_Warning'));
+            const ok = confirm(browser.i18n.getMessage('options_WindowData_ClearData_Warning'));
             if (ok) {
                 browser.runtime.sendMessage({ type: messageTypes.clearWindowData });
             }
         });
         document.getElementById('applyDefaultWindowNameButton').addEventListener('click', () => {
-            let ok = confirm(browser.i18n.getMessage('options_WindowData_ApplyDefaultName_Warning'));
+            const ok = confirm(browser.i18n.getMessage('options_WindowData_ApplyDefaultName_Warning'));
             if (ok) {
-                browser.runtime.sendMessage({ type: messageTypes.applyWindowName, name: document.getElementById('windowDefaultName').value });
+                browser.runtime.sendMessage({ type: messageTypes.applyWindowName, name: (/** @type {HTMLInputElement} */ (document.getElementById('windowDefaultName'))).value });
             }
         });
     }
@@ -132,85 +209,39 @@ async function initiatePage() {
     // #region Commands
 
     {
-        const { area, update } = createCommandArea({
-            sectionAnimationInfo: sectionAnimation,
+        const shortcuts = createShortcutsArea({
+            sectionAnimation,
             commandInfos: {
                 '_execute_browser_action': {
                     description: 'options_Commands_BrowserAction',
-                    createContent: () => {
-                        return null;
-                    },
                 },
-            }
+            },
+            headerMessage: 'options_Commands_Title',
+            infoMessage: 'options_Commands_Info',
+
+            resetButtonMessage: 'options_Commands_ResetButton',
+            promptButtonMessage: 'options_Commands_PromptButton',
         });
+        document.getElementById('commandsArea').appendChild(shortcuts.area);
         eventStarters.createDisposable(() => {
-            update();
+            shortcuts.update();
         });
     }
 
     // #endregion Commands
 
 
-
-    // #region Fix No Title for New Tab Pages
-
-    {
-        let fixNoTitleSection = createCollapsableArea(sectionAnimation);
-        fixNoTitleSection.title.classList.add('enablable');
-        fixNoTitleSection.title.classList.add('center');
-        fixNoTitleSection.area.classList.add('standardFormat');
-        document.body.appendChild(fixNoTitleSection.area);
-
-        let fixNoTitleHeader = document.createElement('div');
-        fixNoTitleHeader.classList.add(messagePrefix + 'options_NewTabNoTitleWorkaround_Header');
-        fixNoTitleSection.title.appendChild(fixNoTitleHeader);
-
-        let fixNoTitleArea = document.getElementById('fixNoTabForNewTabPagesArea');
-        fixNoTitleSection.content.appendChild(fixNoTitleArea);
-
-        let fixNoTitleCheckbox = document.getElementById('newTabNoTitleWorkaround_Enabled');
-        let checkboxChanged = () => {
-            let value = fixNoTitleCheckbox.checked;
-            toggleClass(fixNoTitleSection.title, 'enabled', value);
-            toggleClass(fixNoTitleArea, 'enabled', value);
-        };
-        let checkPermission = async () => {
-            let hasPermissions = await browser.permissions.contains({ permissions: ['tabs'] });
-            toggleClass(fixNoTitleSection.title, 'error', !hasPermissions);
-        };
-        startListener(() => {
-            let listener = new EventListener(fixNoTitleCheckbox, 'input', (e) => checkboxChanged());
-            checkboxChanged();
-            let permissionListener = new EventListener(onPermissionChange, () => checkPermission());
-            checkPermission();
-            return [listener, permissionListener];
-        });
-    }
-
-    // #endregion Fix No Title for New Tab Pages
-
-
     // #region Optional Permissions
-    var onPermissionChange;
+
     {
-        let optionalPermissionsArea = createCollapsableArea(sectionAnimation);
-        optionalPermissionsArea.area.classList.add('standardFormat');
-        optionalPermissionsArea.title.classList.add('center');
-        optionalPermissionsArea.title.classList.add('enablable');
-        optionalPermissionsArea.content.classList.add('optionalPermissionArea');
-        document.body.appendChild(optionalPermissionsArea.area);
-
-        let permissionControllers = [];
-        onPermissionChange = new EventManager();
-        onPermissionChange.addListener(() => {
-            let hasAnyPermission = permissionControllers.filter(controller => controller.hasPermission).length > 0;
-            toggleClass(optionalPermissionsArea.title, 'enabled', hasAnyPermission);
-        });
-        let pagePermissionChanged = pagePort.getEvent('permissionChanged');
+        const optionalPermissionsArea = document.getElementById('permissionsArea');
+        const pagePermissionChanged = pagePort.getEvent('permissionChanged');
 
 
-        let areaDetails = {
-            requestViaBrowserActionCallback: async (permission) => await pagePort.sendMessageBoundToPort({ type: messageTypes.requestPermission, permission: permission }),
+        const areaDetails = {
+            requestViaBrowserActionCallback: async (permission) => {
+                await pagePort.sendMessageBoundToPort({ type: messageTypes.requestPermission, permission: permission });
+            },
             permissionChangedCallback: (obj, internalChange) => {
                 if (internalChange) {
                     browser.runtime.sendMessage({ type: messageTypes.permissionsChanged, permission: obj.permission, value: obj.hasPermission });
@@ -219,26 +250,21 @@ async function initiatePage() {
             },
             onPermissionChanged: pagePermissionChanged,
             sectionAnimationInfo: sectionAnimation,
+            browserActionPromptMessage: 'optionalPermissions_BrowserActionPrompt',
         };
 
-        let createPermissionButtonArea = function (permission, titleMessage, explanationMessage) {
-            let obj = createOptionalPermissionArea(Object.assign(areaDetails, { permission, titleMessage, explanationMessage }));
+        const createPermissionButtonArea = function (permission, titleMessage, explanationMessage) {
+            const obj = createOptionalPermissionArea(Object.assign({}, areaDetails, { permission, titleMessage, explanationMessage }));
             permissionControllers.push(obj);
-            optionalPermissionsArea.content.appendChild(obj.area);
+            optionalPermissionsArea.appendChild(obj.area);
             return obj;
         };
-
-        let header = document.createElement('div');
-        header.classList.add(messagePrefix + 'options_OptionalPermissions_Header');
-        optionalPermissionsArea.title.appendChild(header);
 
         createPermissionButtonArea({ permissions: ['tabs'] }, 'options_OptionalPermissions_Tabs_Title', 'options_OptionalPermissions_Tabs_Explanation');
     }
 
     // #endregion Optional Permissions
 
-
-    document.body.appendChild(document.getElementById('otherSettings'));
 
     document.getElementById('resetSettingsButton').addEventListener('click', async (e) => {
         let ok = confirm(browser.i18n.getMessage('options_resetSettings_Prompt'));
@@ -252,16 +278,40 @@ async function initiatePage() {
         // Clear settings:
         await browser.storage.local.clear();
 
+        // Wait for settings change to be applied:
+        await delay(100);
+
         // Reload options info:
         startAllListeners();
     });
 
 
-    setTextMessages();
+    setTextMessages(null, { asHTML: true });
+
+    const checkRequired = bindDependantSettings();
+    startListener(() => checkRequired());
+
     await settingsTracker.start;
+
+    const boundSettings = bindElementIdsToSettings(settings, {
+        handleInputEvent: ({ key, value, element }) => {
+            if (element.type === 'number') {
+                value = parseInt(value);
+                if (isNaN(value))
+                    return;
+            }
+            browser.storage.local.set({ [key]: value });
+        },
+        onSettingsChanged: settingsTracker.onChange,
+        newValuePattern: true,
+    });
+    startListener(() => boundSettings.skipCurrentInputIgnore());
+
+
     startAllListeners();
 
-    let checkAnimations = () => {
+
+    const checkAnimations = () => {
         if (settings.disableOptionsPageAnimations) {
             sectionAnimation.update({ reset: true });
         } else {
@@ -269,8 +319,13 @@ async function initiatePage() {
         }
     };
     settingsTracker.onChange.addListener((changes) => {
+        collapsableInfo.checkAll();
+
         if (changes.disableOptionsPageAnimations) {
             checkAnimations();
+        }
+        if (changes.optionsPage_disableDarkTheme) {
+            toggleClass(document.documentElement, 'support-dark-theme', !settings.optionsPage_disableDarkTheme);
         }
     });
     checkAnimations();

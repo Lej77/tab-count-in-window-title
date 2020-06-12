@@ -1,3 +1,5 @@
+@import "../ui/collapsable.css";
+@import "../ui/utilities.css";
 
 
 html {
@@ -7,11 +9,20 @@ html {
 }
 body {
     font: caption;
-    width: 200px;
+    width: 220px;
     flex: 1 1 auto;
 }
 
 
+@media (prefers-color-scheme: dark) {
+    :root.support-dark-theme .area {
+        border-color: transparent;
+    }
+}
+
+.area:not(.noPadding) {
+    padding: 5px;
+}
 
 
 .windowNameArea {
@@ -27,7 +38,7 @@ body {
 
     display: flex;
     justify-content: space-between;
-    align-items: center;    
+    align-items: center;
 }
 .windowNameLabel {
     text-align: center;
@@ -35,7 +46,7 @@ body {
 }
 
 
-.optionsShortcut {    
+.optionsShortcut {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -48,7 +59,7 @@ body {
     height: 25px;
     border-radius: 5px;
 
-    background-color: hsla(0, 0%, 0%, 10%);    
+    background-color: hsla(0, 0%, 0%, 10%);
 }
 .optionsShortcut:focus,
 .optionsShortcut:hover {
@@ -65,6 +76,21 @@ body {
     background-color: hsla(0, 0%, 0%, 50%);
     mask-image: url("/icons/settings.svg");
     mask-size: cover;
+}
+@media (prefers-color-scheme: dark) {
+    :root.support-dark-theme .optionsShortcut {
+        background-color: hsla(0, 0%, 100%, 20%);
+    }
+    :root.support-dark-theme .optionsShortcut:focus,
+    :root.support-dark-theme .optionsShortcut:hover {
+        background-color: hsla(0, 0%, 100%, 27%);
+    }
+    :root.support-dark-theme .optionsShortcut:active {
+        background-color: hsla(0, 0%, 100%, 34%);
+    }
+    :root.support-dark-theme .optionsShortcut::after {
+        background-color: hsla(0, 0%, 100%, 60%);
+    }
 }
 
 
@@ -93,6 +119,10 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    overflow-wrap: anywhere;
+}
+:root.legacy-force-word-wrap .formatInfo {
+    word-break: break-all;
 }
 .formatPlaceholder:not(:first-child) {
     margin-top: 7px;
@@ -109,11 +139,11 @@ body {
     border-top: var(--collapsable-border);
 }
 .notNamePlaceholdersHeader {
-    text-align: center;    
+    text-align: center;
     font-size: 13px;
 
     align-self: center;
-    
+
     margin-bottom: 2px;
     border-bottom: 1px groove black;
 }
@@ -121,7 +151,7 @@ body {
 
 
 
-.overideSettingArea {    
+.overideSettingArea {
     box-shadow: inset 0px 0px 4px -1px;
 }
 .overrideArea {

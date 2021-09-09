@@ -14,6 +14,9 @@
     "options_UpdatesOff": {
         "message": "False"
     },
+    "options_openInSeparateTab": {
+        "message": "Open this option page in a separate tab"
+    },
     "options_GeneralSection_Header": {
         "message": "Window Preface"
     },
@@ -32,8 +35,14 @@
     "options_DontSetWindowTitleInPrivateWindows": {
         "message": "Don't set title's for private windows."
     },
+    "options_DontSetWindowTitlesForPopups": {
+        "message": "Don't set title's for popup windows."
+    },
     "options_NewTabNoTitleWorkaround_Header": {
-        "message": "Workaround for no title in new tab pages"
+        "message": "Workaround for no title in new tab pages (Legacy)"
+    },
+    "options_NewTabNoTitleWorkaround_LegacyWarning": {
+        "message": "This section is a workaround for a Firefox bug that has been fixed since at least Firefox 83.0 and Firefox ESR 78.5.0."
     },
     "options_NewTabNoTitleWorkaround_Permission": {
         "message": "Note: this feature requires the \"tabs\" permission to function."
@@ -215,7 +224,7 @@
         "message": "Keyboard shortcuts"
     },
     "options_Commands_Info": {
-        "message": "Select one of the text inputs bellow and then make a keyboard combination such as \"Alt+X\" to bind the keyboard shortcut to the selected text box. You can also press the \"Prompt\" button and manually write down a keyboard shortcut if you prefer. (Keyboard shortcuts require Firefox 60 or later)"
+        "message": "Select one of the text inputs below and then make a keyboard combination such as \"Alt+X\" to bind the keyboard shortcut to the selected text box. You can also press the \"Prompt\" button and manually write down a keyboard shortcut if you prefer. (Keyboard shortcuts require Firefox 60 or later)"
     },
     "options_Commands_ResetButton": {
         "message": "Reset"

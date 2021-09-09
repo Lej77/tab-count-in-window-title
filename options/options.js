@@ -75,8 +75,24 @@ quickLoadSetting('optionsPage_disableDarkTheme')
     })
     .catch(error => console.error('Failed to disable dark theme support on options page.', error));
 
+{
+    let embedded = true;
+    try {
+        embedded = new URLSearchParams(window.location.search).get('embedded') != 'false';
+    } catch (error) {
+        console.error('Failed to get page query params.\nError: ', error);
+    }
+    if (embedded) {
+        document.documentElement.classList.add('embeddedInExtensionPage');
+    }
+}
 
 async function initiatePage() {
+    // Link to separate option page:
+    (/** @type{HTMLAnchorElement} */(document.getElementById('topLinkToOptionsPage'))).href =
+        browser.runtime.getURL(browser.runtime.getManifest().options_ui.page + '?embedded=false');
+
+
     const pagePort = new PortConnection();
     const sectionAnimation = new AnimationInfo({ standard: false }); // No animation before load to expand initial sections immediately.
 
@@ -294,7 +310,7 @@ async function initiatePage() {
                 if (permission) {
                     return requestOp.getValue();
                 } else {
-                    requestOp.resolve();
+                    requestOp.resolve(null);
                     requestOp = new PromiseWrapper();
                 }
             },

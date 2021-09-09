@@ -31,6 +31,11 @@ import {
 } from '../background/window-wrapper.js';
 
 
+/**
+ * @typedef {import('../common/utilities.js').BrowserWindow} BrowserWindow
+ */
+
+
 // Notifications for changes in permissions or session data isn't provided by the extension API yet so we define our own and make sure to invoke them when we do anything that could change them:
 export const onWindowDataUpdate = new EventManager();
 export const onPermissionsChange = new EventManager();
@@ -66,12 +71,19 @@ const waitForLoad = async () => {
 const createWindowFilter = () => {
   const ignorePrivate_Tabs = settings.ignorePrivateWindows;
   const ignorePrivate_Titles = settings.dontSetPrivateWindowTitles;
+  const ignorePopupWindows = settings.dontSetWindowTitlesForPopups;
 
   return (collection, filter) => {
     const ignorePrivate = (filter === filterType.tabCount) ? ignorePrivate_Tabs : ignorePrivate_Titles;
     return collection.array.filter(wrapper => {
+      /** @type {BrowserWindow} */
       const window = wrapper.window;
       if (ignorePrivate && window.incognito) {
+        // Ignore private windows for this operation (set title preface / count tabs):
+        return false;
+      }
+      if (filter === filterType.title && ignorePopupWindows && window.type !== 'normal') {
+        // Don't set popup window's title prefix.
         return false;
       }
       return true;
@@ -147,7 +159,8 @@ new EventListener(settingsTracker.onChange, (changes) => {
   }
   if (
     changes.ignorePrivateWindows ||
-    changes.dontSetPrivateWindowTitles
+    changes.dontSetPrivateWindowTitles ||
+    changes.dontSetWindowTitlesForPopups
   ) {
     windowWrapperCollection.windowFilter = createWindowFilter();
   }

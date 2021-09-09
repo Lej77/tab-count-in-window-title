@@ -230,7 +230,7 @@ export function createShortcutsArea({
 
   // Create areas for all commands:
   browser.commands.getAll().then(async (commands) => {
-    for (let command of commands) {
+    for (const command of commands) {
       await createShortcutArea(command);
     }
 

@@ -334,6 +334,12 @@ export function getDefaultSettings() {
         ignorePrivateWindows: true,
         /** Don't set window prefixes in private windows. */
         dontSetPrivateWindowTitles: true,
+        /** Don't set window prefixes for popup windows.
+         *
+         * This might be desired to know which Firefox profile opened a popup
+         * but if so then the advanced users should find this setting and disable
+         * it. */
+        dontSetWindowTitlesForPopups: true,
 
         timeBetweenUpdatesInMilliseconds: 100,
         windowPrefixFormat: '[%TabCount%] %IfWindowName(%WindowName% | ,)%',

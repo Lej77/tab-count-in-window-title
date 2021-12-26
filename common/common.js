@@ -341,8 +341,19 @@ export function getDefaultSettings() {
          * it. */
         dontSetWindowTitlesForPopups: true,
 
+        /** We try to ensure many operations have at least this much time
+         * between them. Currently this includes for example title updates and
+         * tab recounts. */
         timeBetweenUpdatesInMilliseconds: 100,
         windowPrefixFormat: '[%TabCount%] %IfWindowName(%WindowName% | ,)%',
+
+        /** When the tab count for a window is less than or equal to this number
+         * then we should always recount tabs after a tab count change to ensure
+         * we remain in sync with the browser even in the face of possible bugs.
+         *
+         * Note that if this is a negative value then we should always recount
+         * and if it is `0` then we should never recount. */
+        recountTabsWhenEqualOrLessThan: 10,
 
         windowDefaultName: '',
         windowInheritName: false,

@@ -44,6 +44,10 @@ import {
  * @typedef {import('../common/utilities.js').BrowserTab} BrowserTab
  */
 
+/**
+ * @typedef {import('../common/utilities.js').BrowserWindow} BrowserWindow
+ */
+
 
 // Allow sharing extension API event listeners to hopefully decrease overhead:
 const tabOnCreated = new PassthroughEventManager(browser.tabs.onCreated);
@@ -68,6 +72,26 @@ export class WindowWrapperCollection {
 
         const onWindowDataChange = new EventManager();
         this.onWindowDataChange = onWindowDataChange.subscriber;
+
+
+        // #region Max Tabs to allow "tabs query" for updating tab count
+
+        let recountTabsWhenEqualOrLessThan = -1;
+        const getRecountTabsWhenEqualOrLessThan = () => recountTabsWhenEqualOrLessThan;
+        const setRecountTabsWhenEqualOrLessThan = (value) => {
+            if (value === recountTabsWhenEqualOrLessThan) {
+                return;
+            }
+            recountTabsWhenEqualOrLessThan = value;
+
+            // Ensure that new recount value is used:
+            for (const wrapper of this.array) {
+                wrapper.recountTabsWhenEqualOrLessThan = value;
+            }
+        };
+        defineProperty(this, 'recountTabsWhenEqualOrLessThan', getRecountTabsWhenEqualOrLessThan, setRecountTabsWhenEqualOrLessThan);
+
+        // #endregion Max Tabs to allow "tabs query" for updating tab count
 
 
         // #region Block Time in milliseconds
@@ -746,19 +770,23 @@ export class WindowWrapperCollection {
             }
 
             const listeners = new DisposableCollection([
-                new EventListener(tabOnCreated, (tab) => handleEvent(async () => {
+                new EventListener(tabOnCreated, (tab) => handleEvent((delayed) => {
+                    if (delayed) return;
                     getWrapperAndDo(tab.windowId, (wrapper) => {
                         wrapper.tabAdded(tab.id);
                     });
                 })),
-                new EventListener(tabOnRemoved, (tabId, { windowId, isWindowClosing }) => handleEvent(() => {
+                new EventListener(tabOnRemoved, (tabId, { windowId, isWindowClosing }) => handleEvent((delayed) => {
+                    if (delayed) return;
                     getWrapperAndDo(windowId, (wrapper) => wrapper.tabRemoved(tabId));
                 })),
 
-                new EventListener(browser.tabs.onAttached, (tabId, { newWindowId, newPosition }) => handleEvent(() => {
+                new EventListener(browser.tabs.onAttached, (tabId, { newWindowId, newPosition }) => handleEvent((delayed) => {
+                    if (delayed) return;
                     getWrapperAndDo(newWindowId, (wrapper) => wrapper.tabAdded(tabId));
                 })),
-                new EventListener(browser.tabs.onDetached, (tabId, { oldWindowId, oldPosition }) => handleEvent(() => {
+                new EventListener(browser.tabs.onDetached, (tabId, { oldWindowId, oldPosition }) => handleEvent((delayed) => {
+                    if (delayed) return;
                     getWrapperAndDo(oldWindowId, (wrapper) => wrapper.tabRemoved(tabId));
                 })),
             ]);
@@ -833,7 +861,14 @@ export class WindowWrapperCollection {
                             initialWindowData[windowDataKeys.settings] = lastWrapper.windowSettings;
                         }
                     }
-                    this.addWindowWrappers(new WindowWrapper(window, getBlockTime, winDataSettings.trackRestore, initialWindowData));
+                    this.addWindowWrappers(new WindowWrapper({
+                        window,
+                        blockTime: getBlockTime,
+                        trackSessionRestore: winDataSettings.trackRestore,
+                        initialWindowData,
+                        recountTabsWhenEqualOrLessThan,
+                        wasCreatedJustNow: true,
+                    }));
                 })),
                 new EventListener(browser.windows.onRemoved, (windowId) => handleEvent(() => {
                     this.removeWindowWrappers(this.getWindowWrappersById(windowId));
@@ -950,6 +985,7 @@ export class WindowWrapperCollection {
             const ids = this.array.map(wrapper => wrapper.window.id);
             for (const wrapper of windowWrappers) {
                 if (ids.includes(wrapper.window.id)) {
+                    wrapper.dispose();
                     continue;
                 }
                 this.array.push(wrapper);
@@ -1005,20 +1041,26 @@ export class WindowWrapperCollection {
         let queuedCallbacks = [];
         let isStarted = false;
         let isDisposed = false;
+
+        // eslint-disable-next-line valid-jsdoc
+        /** Handle an event.
+         *
+         * Might be queued if we are currently building new WindowWrappers for
+         * all windows.
+         * @param {(delayed: boolean) => any} callback Callback that handles the
+         * event */
         const handleEvent = (callback) => {
             if (isDisposed) {
                 return;
             }
             if (isStarted) {
-                callback();
+                callback(false);
             } else {
                 queuedCallbacks.push(callback);
             }
         };
 
-        const start = () => {
-            startWindowListeners();
-        };
+        /** Get information for all windows. */
         // eslint-disable-next-line no-underscore-dangle
         const _start = async () => {
             if (isDisposed) {
@@ -1029,13 +1071,18 @@ export class WindowWrapperCollection {
             const windows = await browser.windows.getAll({ populate: true });
 
             const winDataSettings = getWindowDataSettings();
-            this.addWindowWrappers(windows.map(window => new WindowWrapper(window, getBlockTime, winDataSettings.trackRestore)));
+            this.addWindowWrappers(windows.map(window => new WindowWrapper({
+                window,
+                blockTime: getBlockTime,
+                trackSessionRestore: winDataSettings.trackRestore,
+                recountTabsWhenEqualOrLessThan,
+            })));
 
             for (const callback of queuedCallbacks) {
                 if (isDisposed) {
                     break;
                 }
-                callback();
+                callback(true);
             }
             queuedCallbacks = [];
             isStarted = true;
@@ -1238,12 +1285,32 @@ export class WindowWrapperCollection {
 
 
 export class WindowWrapper {
-    constructor(window, blockTime, trackSessionRestore, initialWindowData = {}) {
+    /**
+     * Creates an instance of WindowWrapper.
+     * @param {Object} Params Parameters
+     * @param {BrowserWindow} Params.window Window data.
+     * @param {number | function(): number} Params.blockTime Minimum time between expensive operations.
+     * @param {boolean} Params.trackSessionRestore Whether to track if a window is a re-opened closed window or a newly created one.
+     * @param {Object} Params.initialWindowData Default window data.
+     * @param {number} Params.recountTabsWhenEqualOrLessThan Set initial tab limit for when to perform recounts.
+     * @param {boolean} Params.wasCreatedJustNow `true` if the window was just created and so we know that we haven't missed any tab events.
+     * @memberof WindowWrapper
+     */
+    constructor({ window, blockTime, trackSessionRestore, initialWindowData = {}, recountTabsWhenEqualOrLessThan = 100, wasCreatedJustNow = false }) {
         if (!initialWindowData) {
             initialWindowData = {};
         }
 
         this.window = window;
+
+        /** @type {number[]} Ids of tabs that were last observed being in this
+         * window. Simplified version of `this.window.tabs`. */
+        this._lastSeenTabIds = this.window.tabs && Array.isArray(this.window.tabs) ? this.window.tabs.map(tab => tab.id) : [];
+
+        // Don't keep tab info around since we don't use it and it takes up
+        // memory (especially if we are allowed to observe URLs and titles using
+        // the `tabs` permission);
+        delete this.window.tabs;
 
         // #region Dispose
 
@@ -1254,7 +1321,58 @@ export class WindowWrapper {
 
         // #region Tab count
 
-        this._ignoredTabIds = [];
+        /** @type {number} When the tab count is less than or equal to this
+         * number then we should always recount tabs after a tab count change to
+         * ensure we remain in sync with the browser even in the face of
+         * possible bugs.
+         *
+         * Note that if this is a negative value then we should always recount
+         * and if it is `0` then we should never recount. */
+        this._recountTabsWhenEqualOrLessThan = recountTabsWhenEqualOrLessThan;
+        /** If this is `true` then it will force a single recount even if it
+         * wouldn't be allowed because of `_recountTabsWhenEqualOrLessThan`. */
+        this._forceRecount = false;
+
+        this._tabCount = 1;
+        this._updateTabCountFromStoredTabs();
+
+        /** Indicates if we are currently tracking recently removed tabs.
+         *
+         * If this is `false` then we should wait at least 100 ms and preferably
+         * longer before making a tabs.query operation since they might contain
+         * removed tabs. */
+        this._ignoredTabIds_enabled = Boolean(wasCreatedJustNow);
+        /** @type {Set<number>} Tab ids that have been closed or moved to a
+         * different window. The browser might still return those tabs from
+         * `browser.tabs.query` for a small time after they were moved/closed.
+         *
+         * This seems to only affect closed tabs and not moved tabs (but not
+         * entirely sure about that). From some basic testing the `tabs.query`
+         * API's result will include closed tabs for about 100 milliseconds
+         * after they were removed. */
+        this._ignoredTabIds = new Set();
+        /** @type {null | Set<number>} Used to keeps track of ids of tabs that
+         * were removed while the `_updateTabs` method were doing a
+         * `browser.tabs.query` operation.
+         *
+         * Any tab ids in this set might have been included in the query result
+         * even though they are actually closed. */
+        this._duringUpdate_removedTabIds = null;
+        /** @type {null | Set<number>} Used to keeps track of ids of tabs that
+         * were added while the `_updateTabs` method were doing a
+         * `browser.tabs.query` operation.
+         *
+         * Any tab ids in this set might not have been created until after the
+         * `browser.tabs.query` operation was started and so might not have been
+         * included in the result.
+         *
+         * In Firefox version `95.0.2` on Windows 10 this field is quite
+         * unnecessary since `browser.tabs.query` results always seem to include
+         * tabs that were created while the query was in progress. Even so we
+         * will keep it in order to remain compatible with future version of
+         * Firefox or in case other platforms behave differently. */
+        this._duringUpdate_addedTabIds = null;
+        /** Queues tab recounts. */
         this._updateManager = new RequestManager(
             async () => {
                 await this._updateTabs();
@@ -1439,67 +1557,235 @@ export class WindowWrapper {
         // #endregion Generate get and set helpers for session data properties
 
 
-        // Ensure the wrapped window data always has a tab count:
-        if (!this.window.tabs) {
-            this._updateManager.invalidate();
-        }
+        // Ensure we have a correct tab count when initialized (note that if
+        // `wasCreatedJustNow` is false then it will take about 2 seconds before
+        // we get the tab count):
+        this.forceTabUpdate();
     }
 
 
     // #region Tab Count
 
-    async _updateTabs(windowTabs = null) {
+    _checkIfShouldRecount() {
+        if (this._forceRecount || this._recountTabsWhenEqualOrLessThan < 0 || this.tabCount <= this._recountTabsWhenEqualOrLessThan) {
+            // Do recount:
+            return true;
+        } else {
+            // No recount:
+            this._ignoredTabIds_enabled = false;
+            this._ignoredTabIds.clear();
+
+            return false;
+        }
+    }
+
+    async _updateTabs() {
         if (this.isDisposed) return;
 
-        // Get copy of array since it might change while waiting for tabs.
-        const ignoredIds = this._ignoredTabIds.slice();
+        // Don't do recounts when we have too many tabs:
+        if (!this._checkIfShouldRecount()) return;
 
-        if (!windowTabs || !Array.isArray(windowTabs)) {
-            windowTabs = await browser.tabs.query({ windowId: this.window.id });
+        // If we weren't tracking recently removed tabs then start now:
+        if (!this._ignoredTabIds_enabled) {
+            this._ignoredTabIds_enabled = true;
+            // Should wait at least 100 ms to ensure no recently removed tabs
+            // are returned by the `query` API:
+            await delay(2000);
+            if (this.isDisposed || !this._ignoredTabIds_enabled) return;
 
-            // Update active tab info:
-            for (const tab of windowTabs) {
-                if (tab.active) {
-                    this.activeTab = tab;
-                    break;
+            // Any tab count invalidation that was made while we were waiting
+            // will be dealt with now:
+            this._updateManager.validate();
+        }
+
+        // Track any tabs that are added or removed while we are waiting:
+        if (this._duringUpdate_removedTabIds || this._duringUpdate_addedTabIds) throw new Error('Tried to update tab count while such an update was already in progress');
+        this._duringUpdate_removedTabIds = new Set();
+        this._duringUpdate_addedTabIds = new Set();
+        try {
+            /** @type {BrowserTab[]} */
+            const windowTabs = await browser.tabs.query({ windowId: this.window.id });
+            if (this.isDisposed || !this._ignoredTabIds_enabled) return;
+
+            // Handle ignored tabs:
+            /** Tab ids that didn't exist in the gathered tabs.
+             *
+             * Initially set to remove all ignored tabs, but then we remove the
+             * ones we want to keep from it. */
+            const ignoredTabIdsToRemove = (this._ignoredTabIds.size > 0) ? new Set(this._ignoredTabIds) : null;
+            if (ignoredTabIdsToRemove) {
+                // Don't remove tabs that started being ignored after we made
+                // the tab query (they might somehow show up in the next query
+                // if they were added just before they were removed):
+                for (const newlyRemovedId of this._duringUpdate_removedTabIds.values()) {
+                    ignoredTabIdsToRemove.delete(newlyRemovedId);
                 }
             }
+            {
+                let index = 0;
+                while (index < windowTabs.length) {
+                    const tab = windowTabs[index];
+
+                    // If the tab is included in query result then it is not "newly added":
+                    this._duringUpdate_addedTabIds.delete(tab.id);
+
+                    if (this._ignoredTabIds.has(tab.id)) {
+                        // Track ignored ids that still exist:
+                        if (ignoredTabIdsToRemove) {
+                            ignoredTabIdsToRemove.delete(tab.id);
+                        }
+                        // Remove ignored tabs:
+                        windowTabs.splice(index, 1);
+                    } else {
+                        index++;
+                    }
+                }
+            }
+            // Only keep ignoring tab ids that are still in use.
+            if (ignoredTabIdsToRemove) {
+                for (const idToRemove of ignoredTabIdsToRemove.values()) {
+                    this._ignoredTabIds.delete(idToRemove);
+                }
+            }
+            // Update tab info:
+            const oldTabCount = this.tabCount;
+            this._lastSeenTabIds = windowTabs.map(tab => tab.id);
+            this._updateTabCountFromStoredTabs();
+            // Count any tabs that were created during the query operation as
+            // well (even if they weren't included in the returned result):
+            this._tabCount += this._duringUpdate_addedTabIds.size;
+
+            // Notify event listeners:
+            const newTabCount = this.tabCount;
+            this._onTabUpdate.fire(this);
+            if (oldTabCount !== newTabCount) {
+                this._onTabCountChange.fire(this, oldTabCount, newTabCount);
+            }
+        } finally {
+            // Its okay to do this after an await or event fire since the update
+            // manager ensure that _updateTabs isn't called multiple times
+            // concurrently.
+            this._duringUpdate_removedTabIds = null;
+            this._duringUpdate_addedTabIds = null;
         }
-        const oldTabCount = this.tabCount;
-        this.window.tabs = windowTabs.filter(tab => !this._ignoredTabIds.includes(tab.id));
 
-        const newIgnoredIds = this._ignoredTabIds.filter(id => !ignoredIds.includes(id));
-        let tabListIds = windowTabs.map(tab => tab.id);
-        this._ignoredTabIds = ignoredIds.filter(id => tabListIds.includes(id)); // Only keep ignoring tab ids that are still in use.
-        this._ignoredTabIds.push.apply(this._ignoredTabIds, newIgnoredIds);           // Add tab ids that started being ignored after tab query.
+        if (this._forceRecount) {
+            this._forceRecount = false;
+            // Might stop tracking recently removed tabs:
+            this._checkIfShouldRecount();
+        }
+    }
+    _updateTabCountFromStoredTabs() {
+        let tabCount = this._lastSeenTabIds.length;
 
-        const newTabCount = this.tabCount;
-        this._onTabUpdate.fire(this);
-        if (oldTabCount !== newTabCount) {
-            this._onTabCountChange.fire(this, oldTabCount, newTabCount);
+        if (tabCount < 0)
+            tabCount = 0;
+
+        this._tabCount = tabCount;
+    }
+
+    get recountTabsWhenEqualOrLessThan() {
+        return this._recountTabsWhenEqualOrLessThan;
+    }
+    set recountTabsWhenEqualOrLessThan(value) {
+        const wanted = Number(value);
+        if (isNaN(wanted)) throw new Error(`NaN (or actually ${value}) is not a valid "recountTabsWhenEqualOrLessThan" value`);
+        if (this._recountTabsWhenEqualOrLessThan === wanted) return;
+        this._recountTabsWhenEqualOrLessThan = wanted;
+
+        if (this._checkIfShouldRecount() && !this._ignoredTabIds_enabled) {
+            // We had stopped using recounts so start again immediately:
+            this._updateManager.forceUpdate();
         }
     }
 
     get tabCount() {
-        let tabCount = 1;
-        if (this.window && this.window.tabs && Array.isArray(this.window.tabs)) {
-            tabCount = this.window.tabs.length;
-        }
-
-        if (tabCount < 1)
-            tabCount = 1;
-
-        return tabCount;
+        // Never show less than 1 tab (even though that can actually happen in
+        // special circumstances):
+        return this._tabCount > 0 ? this._tabCount : 1;
     }
+    /** A tab was created in this window or moved to it.
+     * @param {number} tabId The id of the added tab. */
     tabAdded(tabId) {
         if (this.isDisposed) return;
-        this._ignoredTabIds = this._ignoredTabIds.filter(tId => tId !== tabId);
-        this._updateManager.invalidate();
+
+        // Track recently added/removed tabs:
+        if (this._ignoredTabIds_enabled) {
+            this._ignoredTabIds.delete(tabId);
+            if (this._duringUpdate_removedTabIds) {
+                this._duringUpdate_removedTabIds.delete(tabId);
+
+                this._duringUpdate_addedTabIds.add(tabId);
+            }
+        }
+
+        // Update tab count:
+        const oldCount = this.tabCount;
+        this._tabCount++;
+        const newCount = this.tabCount;
+
+        if (oldCount !== newCount) {
+            this._onTabCountChange.fire(this, oldCount, newCount);
+        }
+
+        // Get all tabs from API to avoid getting out of sync (especially in
+        // early versions of Firefox this could easily happen due to bugs):
+        if (this._checkIfShouldRecount()) {
+            this._updateManager.invalidate();
+        }
     }
+    /** A tab was closed in this window or a tab was moved away from it to a
+     * different window.
+     * @param {number} tabId The id of the removed tab. */
     tabRemoved(tabId) {
         if (this.isDisposed) return;
-        this._ignoredTabIds.push(tabId);
-        this._updateManager.invalidate();
+
+        // Track recently added/removed tabs:
+        if (this._ignoredTabIds_enabled) {
+            this._ignoredTabIds.add(tabId);
+            if (this._duringUpdate_removedTabIds) {
+                this._duringUpdate_removedTabIds.add(tabId);
+
+                this._duringUpdate_addedTabIds.delete(tabId);
+            }
+        }
+
+        // Test how long an ignored tab id can be returned by `browser.tabs.query`:
+        /*
+        const removedAt = Date.now();
+        const makeQuery = async () => {
+            const queriedAt = Date.now();
+            const tabs = await browser.tabs.query({ windowId: this.window.id }).catch(() => null);
+            const [tab,] = tabs.filter(tab => tab.id === tabId);
+            console.log(tabId, ': Removed tab quired after', queriedAt - removedAt, 'ms, result: ', tab);
+            if (!tab) {
+                clearInterval(intervalId);
+            }
+        };
+        const intervalId = setInterval(makeQuery, 1);
+        makeQuery();
+        */
+
+        // Update tab count:
+        const oldCount = this.tabCount;
+        this._tabCount--;
+        if (this._tabCount < 0) {
+            // Can actually reach 0 tabs if for example
+            // `browser.tabs.closeWindowWithLastTab` is set to `false` via the
+            // `about:config` URL.
+            this._tabCount = 0;
+        }
+        const newCount = this.tabCount;
+
+        if (oldCount !== newCount) {
+            this._onTabCountChange.fire(this, oldCount, newCount);
+        }
+
+        // Get all tabs from API to avoid getting out of sync (especially in
+        // early versions of Firefox this could easily happen due to bugs):
+        if (this._checkIfShouldRecount()) {
+            this._updateManager.invalidate();
+        }
     }
 
     get onTabUpdate() {
@@ -1510,6 +1796,7 @@ export class WindowWrapper {
     }
 
     forceTabUpdate() {
+        this._forceRecount = true;
         this._updateManager.forceUpdate();
     }
     unblockTabUpdate() {
@@ -1712,11 +1999,13 @@ export class WindowWrapper {
         }
 
         // Remove tab title from window title:
-        const currentTab = await browser.tabs.query({ windowId: this.window.id, active: true })[0];
+        const [currentTab,] = await browser.tabs.query({ windowId: this.window.id, active: true });
         if (currentTab.title && currentTab.title !== '') {
             const tabTitleIndex = title.lastIndexOf(currentTab.title);
             if (tabTitleIndex >= 0) {
                 title = title.substr(0, tabTitleIndex);
+            } else {
+                // Probably changed active tab, or tab changed title...
             }
         }
 

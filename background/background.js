@@ -121,6 +121,7 @@ const startTabCounter = async () => {
       createNewTabFixOptions(),
       createWindowDataSettings(),
     );
+    windowWrapperCollection.recountTabsWhenEqualOrLessThan = settings.recountTabsWhenEqualOrLessThan;
   }
 };
 const stopTabCounter = () => {
@@ -131,11 +132,9 @@ const stopTabCounter = () => {
 };
 
 new EventListener(settingsTracker.onChange, (changes) => {
-
   if (changes.isEnabled) {
-    if (changes.isEnabled.newValue) {
+    if (settings.isEnabled) {
       startTabCounter();
-      return;
     } else {
       stopTabCounter();
     }
@@ -152,10 +151,13 @@ new EventListener(settingsTracker.onChange, (changes) => {
   }
 
   if (changes.windowPrefixFormat) {
-    windowWrapperCollection.titleFormat = changes.windowPrefixFormat.newValue;
+    windowWrapperCollection.titleFormat = settings.windowPrefixFormat;
   }
   if (changes.timeBetweenUpdatesInMilliseconds) {
-    windowWrapperCollection.blockTime = changes.timeBetweenUpdatesInMilliseconds.newValue;
+    windowWrapperCollection.blockTime = settings.timeBetweenUpdatesInMilliseconds;
+  }
+  if (changes.recountTabsWhenEqualOrLessThan) {
+    windowWrapperCollection.recountTabsWhenEqualOrLessThan = settings.recountTabsWhenEqualOrLessThan;
   }
   if (
     changes.ignorePrivateWindows ||

@@ -29,6 +29,12 @@
     "options_Pixels": {
         "message": " pixels."
     },
+    "options_RecountTabsWhenEqualOrLessThan_AfterInput": {
+        "message": " tabs in the window. (This can prevent some bugs) (-1 to always recount) (0 to never recount)"
+    },
+    "options_RecountTabsWhenEqualOrLessThan": {
+        "message": "Always recount tabs after a tab count change when there is not more than "
+    },
     "options_AllowInPrivateWindows": {
         "message": "Don't count tabs that are in private windows."
     },

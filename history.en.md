@@ -1,0 +1,84 @@
+# History
+
+- master/HEAD
+- 5.8 (2026-09-16)
+  - Feature: use API from [Winger](https://addons.mozilla.org/en-US/firefox/addon/winger/) to sync window names. Reads names from Winger whenever they are changed and then uses those names in this extension.
+  - Bug fix: style issue on hover of section headers on options page.
+- 5.7 (2021-12-27)
+  - Feature: don't recount all tabs in a window to determine the current tab count when there is a lot of tabs in that window. The limit can be configured in the options page and recounting can be turned off completely as well.
+  - Bug fix: didn't correctly handle setting resets (data was cleared, but addon needed to be restarted before it read the changed settings).
+  - Performance: improved performance for tab counter.
+- 5.6 (2021-09-10)
+  - Feature: don't set titles for popup windows (configurable via settings page, but enabled by default).
+  - Feature: link that opens the options page in a separate tab.
+  - Feature: some changes to the option page's dark theme.
+  - Change: change option page text to note that the "Workaround for no title in new tab pages" is no longer needed since the underlying Firefox bug has been fixed.
+- 5.5 (2020-06-12)
+  - Fix: regression on "Workaround for no title in new tab pages", some timing issues was introduced in version 5.0.
+- 5.4 (2020-06-12)
+  - Fix: a race condition when setting a window's title preface.
+- 5.3 (2020-06-12)
+  - Fix: a race condition when setting a window's title preface to an empty string.
+- 5.2 (2020-06-12)
+  - Change: better warnings about optional "sessions" permission, especially in earlier Firefox versions (before Firefox 77).
+- 5.1 (2020-06-12)
+  - Change: the "sessions" permission is now optional. Note that this requires Firefox 77.
+- 5.0 (2020-06-12)
+  - Feature: popup and option pages have support for dark theme (can be disabled via the options page).
+  - Settings: allow setting the width of the popup.
+  - New placeholder: %ActiveTabIndex% placeholder that is replaced with an index based on the current selected tab.
+  - New placeholder: %IfRegexMatch% placeholder that allows for different placeholders depending on if a text (that can contain other placeholders) matches a regular expression.
+  - New placeholder: %Comma% and %Percent% placeholders to write text that would have been interpreted as placeholders.
+  - Change: make the popup slightly wider.
+  - Change: refactored code to use modules.
+- 4.8 (2019-02-26)
+  - Bug fix: the default title prefix had more than one space and caused userChrome.css rules to stop working.
+  - Buf fix: %Count% placeholder could fail to update in some situations.
+- 4.7 (2019-02-06)
+  - Improvement: %Count% placeholder doesn't consider different tab counts to be unique prefixes.
+  - Settings: changed the title prefix for default settings to allow for using window names.
+  - New placeholder: show some text only if the current window has a window name.
+  - Settings: added a button to reset all settings to default values.
+  - UI improvement: keyboard support for collapsable sections and for the settings button in the toolbar button's popup.
+- 4.6 (2018-09-06)
+  - Bug fix: keyboard shortcut can't be detected in Firefox 64.
+- 4.5 (2018-07-24)
+  - Fixed bug when disabling "Workaround for no title in new tab pages". The workaround would become permanently disabled until the extension was restarted.
+  - Customizable keyboard shortcut to open popup. (Requires Firefox 60 or later.)
+  - Fixed black border on popup when using dark themes.
+  - Style changes for override settings in popup.
+- 4.4 (2018-05-15)
+  - Added placeholders for OS, processor architecture, browser version and browser build id.
+- 4.3 (2018-05-15)
+  - Style improvements to settings page and popup page.
+- 4.2 (2018-04-10)
+  - Bug fixes.
+- 4.1 (2018-04-09)
+  - Bug fixes.
+- 4.0 (2018-04-09)
+  - Separated don't count tabs in private windows and don't set title prefixes for private windows into 2 options.
+  - New format placeholder %Count%: an integer, starts as 1 and increments until the window's prefix is unique.
+  - Can now name windows. This is done via the extension's toolbar button. To set the name in the window prefix use the %WindowName% format placeholder.
+  - Window names can be inherited so that an opened window get the same name as the window that was selected when the new window opened.
+  - Override title preface formatting in specific windows via the extension's toolbar button.
+  - New workaround to fix "title prefix not visible on new tab pages".
+  - Now needs "sessions" permission to save window specific data such as window names.
+- 3.0 (2018-04-06)
+  - Fixed: incorrect tab count when closing multiple tabs at the same time.
+  - New placeholder: total tab count of all windows.
+  - New option: ignore private windows. When this option is enabled the title preface won't be set for private windows and the total tab count will not count tabs from private windows.
+- 2.1 (2018-02-16)
+  - Released on AMO.
+- 2.0 (2018-02-16)
+  - Added options page.
+  - Ability to reset window title prefixes without restarting the browser.
+  - New setting: title prefix format.
+  - New setting: maximum update rate of the tab count.
+- 1.1 (2018-02-16)
+  - Released on AMO.
+- 1.0 (2018-02-09)
+  - Released.
+  - Simple code.
+  - No support for changing prefix format.
+  - Counter update rate is hard coded to 5 times a second.
+  - Requires browser restart to reset title prefixes after extension is disabled.

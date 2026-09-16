@@ -295,6 +295,9 @@
     "options_popupPage_width": {
         "message": "The width of the browser action popup (-1 to use the default width):"
     },
+    "options_apiWinger_sync": {
+        "message": "Read window names from <a href=\"https://addons.mozilla.org/firefox/addon/winger/\">Winger</a> using <a href=\"https://github.com/l10nelw/winger/issues/76\">the API it added in version 2.13.0</a>. If enabled then when a window name is changed in Winger then that name will also be set for this extension."
+    },
     "options_resetSettings": {
         "message": "Reset Settings"
     },

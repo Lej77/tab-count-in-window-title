@@ -131,6 +131,37 @@ const stopTabCounter = () => {
   windowWrapperCollection = null;
 };
 
+async function wingerSubscribe() {
+  try {
+    await waitForLoad();
+    if (!settings.apiWinger_sync) {
+      return;
+    }
+
+    // https://github.com/l10nelw/winger/issues/76#issuecomment-5692141119
+    await browser.runtime.sendMessage('winman@lionelw', {
+      type: 'subscribe',
+      properties: ['name'],
+    });
+
+    // https://github.com/l10nelw/winger/wiki/API-for-other-addons
+    const windowInfos = await browser.runtime.sendMessage('winman@lionelw', {
+      type: 'info',
+      properties: ['givenName'],
+    });
+    const promises = [];
+    for (const window of windowInfos) {
+      if (window.givenName && settings.apiWinger_sync) {
+        promises.push(browser.sessions.setWindowValue(window.id, windowDataKeys.name, window.givenName));
+        onWindowDataUpdate.fire(window.id, windowDataKeys.name, window.givenName);
+      }
+    }
+    await Promise.all(promises);
+  } catch (error) {
+    console.error(`Failed to subscriber to window name events from Winger addon`, error);
+  }
+}
+
 new EventListener(settingsTracker.onChange, (changes) => {
   if (changes.isEnabled) {
     if (settings.isEnabled) {
@@ -185,9 +216,16 @@ new EventListener(settingsTracker.onChange, (changes) => {
   ) {
     windowWrapperCollection.windowDataSettings = createWindowDataSettings();
   }
+
+  if (changes.apiWinger_sync) {
+    wingerSubscribe();
+  }
 });
 
 startTabCounter();
+if (settings.apiWinger_sync) {
+  wingerSubscribe();
+}
 
 
 
@@ -279,4 +317,38 @@ const runtimeListeners = new DisposableCollection([
 
     }
   ),
+  new EventListener(browser.runtime.onMessageExternal, (message, sender) => {
+    switch (sender.id) {
+      case 'winman@lionelw':
+        // https://github.com/l10nelw/winger/issues/76#issuecomment-5692141119
+        switch (message.type) {
+          case 'updated':
+            // {
+            //   type: 'updated',
+            //   source: 'user',
+            //   windows: [
+            //     { id: 3, name: 'New name' },
+            //   ],
+            // }
+            if (settings.apiWinger_sync) {
+              (async () => {
+                try {
+                  const promises = [];
+                  for (const window of message.windows) {
+                    if (window.name || message.source === 'user') {
+                      onWindowDataUpdate.fire(window.id, windowDataKeys.name, window.name);
+                      promises.push(browser.sessions.setWindowValue(window.id, windowDataKeys.name, window.name));
+                    }
+                  }
+                  await Promise.all(promises);
+                } catch (error) {
+                  console.error(`Failed to sync window name from Winger addon: `, error);
+                }
+              })();
+            }
+            break;
+        }
+        return Promise.resolve(Boolean(settings.apiWinger_sync)); // must return a truthy value to keep receiving messages
+    }
+  })
 ]);

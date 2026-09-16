@@ -366,6 +366,12 @@ export function getDefaultSettings() {
         newTabNoTitleWorkaround_ReloadWaitInMilliseconds: 10000,
         newTabNoTitleWorkaround_MinPrefixWaitInMilliseconds: -1,
 
+        /** Read window names from
+         * [`Winger`](https://addons.mozilla.org/firefox/addon/winger/) and also
+         * get notified when those names change. If those names are non-empty
+         * then use that as the window name in this extension. */
+        apiWinger_sync: true,
+
         disableOptionsPageAnimations: false,
         optionsPage_disableDarkTheme: false,
 
